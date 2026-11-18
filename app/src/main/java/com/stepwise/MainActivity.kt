@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -79,6 +80,14 @@ class MainActivity : ComponentActivity() {
                 val scope = rememberCoroutineScope()
                 var selected by rememberSaveable { mutableStateOf(Destination.TODAY) }
                 var profileState by remember { mutableStateOf(profileStore.load()) }
+                var profiles by remember { mutableStateOf(profileStore.listProfiles()) }
+                var activeId by remember { mutableStateOf(profileStore.activeProfileId()) }
+                // Reloads the profile list, the active id and the active profile after any change.
+                fun refreshProfiles() {
+                    profiles = profileStore.listProfiles()
+                    activeId = profileStore.activeProfileId()
+                    profileState = profileStore.load()
+                }
                 var trackingActive by rememberSaveable { mutableStateOf(false) }
                 var sensorMissing by rememberSaveable { mutableStateOf(false) }
                 var privacyHidden by rememberSaveable { mutableStateOf(false) }
@@ -95,16 +104,16 @@ class MainActivity : ComponentActivity() {
                 }
 
                 // Live row for today, updated by Room whenever the step service writes.
-                val todayRow by produceState<StepDayEntity?>(initialValue = null, today) {
-                    dao.getRangeFlow(profileStore.activeProfileId() ?: DEFAULT_PROFILE_ID, today, today)
+                val todayRow by produceState<StepDayEntity?>(initialValue = null, today, activeId) {
+                    dao.getRangeFlow(activeId ?: DEFAULT_PROFILE_ID, today, today)
                         .collect { rows -> value = rows.firstOrNull() }
                 }
                 val todaySteps = todayRow?.steps ?: 0
 
                 // Last 60 days of stored rows: covers the 30-day window and the one before it.
-                val history by produceState<List<DailyRecord>>(initialValue = emptyList(), today) {
+                val history by produceState<List<DailyRecord>>(initialValue = emptyList(), today, activeId) {
                     val from = LocalDate.now().minusDays(HISTORY_DAYS).toString()
-                    dao.getRangeFlow(profileStore.activeProfileId() ?: DEFAULT_PROFILE_ID, from, today).collect { rows ->
+                    dao.getRangeFlow(activeId ?: DEFAULT_PROFILE_ID, from, today).collect { rows ->
                         value = rows.map { DailyRecord(it.dateIso, it.steps, it.totalKcal) }
                     }
                 }
@@ -152,11 +161,33 @@ class MainActivity : ComponentActivity() {
                             endDate = LocalDate.now(),
                             modifier = modifier,
                         )
-                        Destination.PROFILE -> ProfileScreen(
+                        Destination.PROFILE -> key(activeId) { ProfileScreen(
                             initial = profileState,
+                            profiles = profiles,
+                            activeId = activeId,
+                            onSelectProfile = { id ->
+                                profileStore.select(id)
+                                refreshProfiles()
+                            },
+                            onAddProfile = { name ->
+                                profileStore.addProfile(name)
+                                refreshProfiles()
+                            },
+                            onRenameProfile = { id, name ->
+                                profileStore.rename(id, name)
+                                refreshProfiles()
+                            },
+                            onDeleteActiveProfile = {
+                                scope.launch {
+                                    val id = activeId ?: DEFAULT_PROFILE_ID
+                                    dao.deleteProfileHistory(id)
+                                    dataReset.deleteProfile()
+                                    refreshProfiles()
+                                }
+                            },
                             onSave = { saved ->
                                 profileStore.save(saved)
-                                profileState = saved
+                                refreshProfiles()
                             },
                             modifier = modifier,
                             theme = themeChoice,
@@ -166,8 +197,10 @@ class MainActivity : ComponentActivity() {
                             },
                             onDeleteProfile = {
                                 scope.launch {
+                                    val id = activeId ?: DEFAULT_PROFILE_ID
+                                    dao.deleteProfileHistory(id)
                                     dataReset.deleteProfile()
-                                    profileState = null
+                                    refreshProfiles()
                                 }
                             },
                             onDeleteAllData = {
@@ -184,7 +217,7 @@ class MainActivity : ComponentActivity() {
                                     startActivity(CsvExporter.export(applicationContext, csv, csvFileName(today)))
                                 }
                             },
-                        )
+                        ) }
                         Destination.CALIBRATE -> CalibrateScreen(
                             saveStride = { cm ->
                                 profileStore.load()?.let { current ->
