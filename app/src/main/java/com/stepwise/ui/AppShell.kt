@@ -1,6 +1,12 @@
 package com.stepwise.ui
 
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -8,12 +14,20 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.vector.ImageVector
 
 enum class Destination(val label: String, val glyph: String) {
     TODAY("Today", "T"),
     TREND("Trend", "~"),
     PROFILE("Profile", "P"),
     CALIBRATE("Calibrate", "C"),
+}
+
+private fun Destination.icon(): ImageVector = when (this) {
+    Destination.TODAY -> Icons.Filled.DirectionsWalk
+    Destination.TREND -> Icons.AutoMirrored.Filled.TrendingUp
+    Destination.PROFILE -> Icons.Filled.Person
+    Destination.CALIBRATE -> Icons.Filled.Straighten
 }
 
 /** Scaffold with a bottom NavigationBar. [content] receives the padding to apply to the screen. */
@@ -30,7 +44,7 @@ fun AppShell(
                     NavigationBarItem(
                         selected = destination == selected,
                         onClick = { onSelect(destination) },
-                        icon = { Text(destination.glyph) },
+                        icon = { Icon(destination.icon(), contentDescription = null) },
                         label = { Text(destination.label) },
                         alwaysShowLabel = true,
                         colors = NavigationBarItemDefaults.colors(
