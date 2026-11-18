@@ -52,20 +52,31 @@ import java.time.ZoneId
  */
 class StepCounterService : Service(), SensorEventListener {
 
+    /** Work for the single consumer: a hardware counter reading, or one software step. */
+    private sealed class StepEvent {
+        class Cumulative(val raw: Long) : StepEvent()
+        object SoftwareStep : StepEvent()
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val events = Channel<Long>(Channel.UNLIMITED)
+    private val events = Channel<StepEvent>(Channel.UNLIMITED)
 
     private var sensorManager: SensorManager? = null
     private var listenerRegistered = false
+    private var accelSource: AccelStepSource? = null
+    private var sensorFree = false
     private var lastSteps = 0
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
         scope.launch {
-            for (raw in events) {
+            for (event in events) {
                 try {
-                    record(raw)
+                    when (event) {
+                        is StepEvent.Cumulative -> record(event.raw)
+                        StepEvent.SoftwareStep -> addSteps(1L)
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -79,6 +90,7 @@ class StepCounterService : Service(), SensorEventListener {
         val plan = servicePlan(
             hasPermission = hasActivityRecognition(this),
             hasSensor = stepSensorState(this) is StepSensorState.Available,
+            hasAccelerometer = hasAccelerometer(this),
         )
         prefs().edit().putBoolean(KEY_SENSOR_MISSING, plan == ServicePlan.NO_SENSOR).apply()
 
@@ -86,7 +98,14 @@ class StepCounterService : Service(), SensorEventListener {
         // service is about to stop (STEPW-23). So the notice is posted first, then we stop.
         try {
             startForegroundCompat(
-                if (plan == ServicePlan.COUNT) buildNotification(lastSteps) else buildNoticeNotification(plan),
+                when (plan) {
+                    ServicePlan.COUNT -> buildNotification(lastSteps)
+                    ServicePlan.ACCELEROMETER -> {
+                        sensorFree = true
+                        buildNotification(lastSteps)
+                    }
+                    else -> buildNoticeNotification(plan)
+                },
             )
         } catch (e: SecurityException) {
             Log.w(TAG, "Cannot start foreground service; stopping", e)
@@ -98,13 +117,15 @@ class StepCounterService : Service(), SensorEventListener {
             return START_NOT_STICKY
         }
 
-        if (plan != ServicePlan.COUNT) {
-            Log.w(TAG, "Not counting steps: $plan")
-            stopSelf()
-            return START_NOT_STICKY
+        when (plan) {
+            ServicePlan.COUNT -> registerListener()
+            ServicePlan.ACCELEROMETER -> startAccelerometer()
+            else -> {
+                Log.w(TAG, "Not counting steps: $plan")
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
-
-        registerListener()
         return START_STICKY
     }
 
@@ -112,7 +133,7 @@ class StepCounterService : Service(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
-        events.trySend(event.values[0].toLong())
+        events.trySend(StepEvent.Cumulative(event.values[0].toLong()))
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -124,6 +145,8 @@ class StepCounterService : Service(), SensorEventListener {
             sensorManager?.unregisterListener(this)
             listenerRegistered = false
         }
+        accelSource?.stop()
+        accelSource = null
         events.close()
         scope.cancel()
         super.onDestroy()
@@ -150,6 +173,15 @@ class StepCounterService : Service(), SensorEventListener {
         val prefs = prefs()
         val last = if (prefs.contains(KEY_LAST_RAW)) prefs.getLong(KEY_LAST_RAW, 0L) else null
         val delta = StepDelta.nextDelta(last, raw)
+
+        addSteps(delta)
+
+        // Store the raw value only after the write succeeded.
+        prefs.edit().putLong(KEY_LAST_RAW, raw).apply()
+    }
+
+    /** Adds [delta] steps to today's row. Runs on the single consumer coroutine. */
+    private suspend fun addSteps(delta: Long) {
         val dateIso = StepDelta.dateIsoFor(System.currentTimeMillis(), ZoneId.systemDefault())
 
         val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
@@ -159,11 +191,16 @@ class StepCounterService : Service(), SensorEventListener {
             .toInt()
         dao.upsert(toEntity(dateIso, steps))
 
-        // Store the raw value only after the write succeeded.
-        prefs.edit().putLong(KEY_LAST_RAW, raw).apply()
-
         lastSteps = steps
         updateNotification(steps)
+    }
+
+    /** Starts the software step source. Each detected step is queued for the single consumer. */
+    private fun startAccelerometer() {
+        if (accelSource != null) return
+        val source = AccelStepSource(this) { _ -> events.trySend(StepEvent.SoftwareStep) }
+        accelSource = source
+        source.start()
     }
 
     /** Without a saved profile, steps are stored with zero distance and kcal. */
@@ -212,10 +249,12 @@ class StepCounterService : Service(), SensorEventListener {
         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(steps))
     }
 
-    private fun buildNotification(steps: Int): Notification =
+    private fun buildNotification(steps: Int, sensorFree: Boolean = this.sensorFree): Notification =
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentTitle("Stepwise is counting steps")
+            .setContentTitle(
+                if (sensorFree) "Counting steps (sensor-free)" else "Stepwise is counting steps",
+            )
             .setContentText("Today: $steps steps")
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)

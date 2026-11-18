@@ -41,8 +41,8 @@ import com.stepwise.export.CsvExporter
 import com.stepwise.export.buildDailyCsv
 import com.stepwise.export.csvFileName
 import com.stepwise.steps.StepCounterService
-import com.stepwise.steps.StepSensorState
-import com.stepwise.steps.stepSensorState
+import com.stepwise.steps.StepTrackingSource
+import com.stepwise.steps.stepTrackingSource
 import com.stepwise.data.GoalsStore
 import com.stepwise.goals.StepPoint
 import com.stepwise.ui.AppShell
@@ -89,9 +89,10 @@ class MainActivity : ComponentActivity() {
                 var goals by remember { mutableStateOf(goalsStore.load()) }
                 val today = LocalDate.now().toString()
 
-                // Checks for a step counter first, so the service never starts without one (STEPW-23).
+                // Checks for a step counter or an accelerometer first, so the service never starts
+                // with no way to count (STEPW-23, STEPW-43).
                 fun startTracking() {
-                    if (stepSensorState(this@MainActivity) is StepSensorState.NoSensor) {
+                    if (stepTrackingSource(this@MainActivity) is StepTrackingSource.None) {
                         sensorMissing = true
                         return
                     }
