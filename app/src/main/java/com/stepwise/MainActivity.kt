@@ -42,6 +42,12 @@ import com.stepwise.steps.LiveSteps
 import com.stepwise.steps.appNotificationSettingsIntent
 import com.stepwise.steps.notificationsEnabled
 import com.stepwise.ui.rememberNotificationRequest
+import com.stepwise.ui.rememberLocationRequest
+import com.stepwise.ui.VehicleCheatingDialog
+import com.stepwise.steps.VEHICLE_NOTIFICATION_ID
+import com.stepwise.steps.VehicleAlert
+import androidx.core.app.NotificationManagerCompat
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -95,7 +101,16 @@ import java.time.LocalDate
 
 private const val HISTORY_DAYS = 60L
 
+/** Outcome of the last CSV import, shown under the Import CSV button until the next import. */
+private data class ImportStatus(val message: String, val failed: Boolean)
+
+private const val CSV_UNREADABLE_MESSAGE =
+    "Could not read this file. Export a CSV from Stepwise and try again."
+
 class MainActivity : ComponentActivity() {
+    /** Result of the latest CSV import. Null before any import and while one is running. */
+    private var importStatus by mutableStateOf<ImportStatus?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -156,11 +171,14 @@ class MainActivity : ComponentActivity() {
                 var notificationsOff by remember { mutableStateOf(!notificationsEnabled(this@MainActivity)) }
                 // Asks for the notification permission (Android 13+) before counting starts. Counting
                 // starts after the answer, granted or denied, so the service still runs without it.
-                val requestNotifications = rememberNotificationRequest {
+                // Asks for location (optional; it enables the vehicle check) after notifications.
+                // Counting starts after that answer too, granted or denied.
+                val requestLocation = rememberLocationRequest {
                     setCountingOn(applicationContext, true)
                     trackingActive = true
                     notificationsOff = !notificationsEnabled(this@MainActivity)
                 }
+                val requestNotifications = rememberNotificationRequest { requestLocation() }
                 fun startTracking() {
                     if (stepTrackingSource(this@MainActivity) is StepTrackingSource.None) {
                         sensorMissing = true
@@ -168,12 +186,21 @@ class MainActivity : ComponentActivity() {
                     }
                     requestNotifications()
                 }
+                // Set when a vehicle stopped counting. Recording is off until the user presses record.
+                val vehiclePending by VehicleAlert.pending.collectAsState()
+                LaunchedEffect(vehiclePending) {
+                    if (vehiclePending) trackingActive = false
+                }
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     // Re-read on return, for example from the notification settings screen.
                     val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) {
-                            notificationsOff = !notificationsEnabled(this@MainActivity)
+                        when (event) {
+                            Lifecycle.Event.ON_RESUME ->
+                                notificationsOff = !notificationsEnabled(this@MainActivity)
+                            Lifecycle.Event.ON_START -> { VehicleAlert.appVisible = true }
+                            Lifecycle.Event.ON_STOP -> { VehicleAlert.appVisible = false }
+                            else -> Unit
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -223,6 +250,11 @@ class MainActivity : ComponentActivity() {
                         permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
                     }
                 }
+
+                if (vehiclePending) VehicleCheatingDialog(onDismiss = {
+                    VehicleAlert.dismiss()
+                    NotificationManagerCompat.from(this@MainActivity).cancel(VEHICLE_NOTIFICATION_ID)
+                })
 
                 if (showOnboarding) OnboardingFlow(
                     onSaveProfile = { state ->
@@ -295,6 +327,8 @@ class MainActivity : ComponentActivity() {
                         Destination.PROFILE -> key(activeId) { ProfileScreen(
                             initial = profileState,
                             hasRecordedData = history.isNotEmpty(),
+                            importMessage = importStatus?.message,
+                            importFailed = importStatus?.failed == true,
                             onPickCsv = { uri ->
                                 scope.launch {
                                     importCsv(uri, dao, activeId ?: DEFAULT_PROFILE_ID, today)
@@ -412,24 +446,39 @@ class MainActivity : ComponentActivity() {
 
     /**
      * Reads a CSV picked by the user, merges it with the stored history and saves the imported
-     * rows for [profileId]. Unreadable or invalid files are ignored, so the app never crashes.
+     * rows for [profileId]. The outcome is kept in [importStatus] for the Profile screen. The app
+     * never crashes on a bad file.
      */
     private suspend fun importCsv(uri: Uri, dao: StepDayDao, profileId: String, today: String) {
-        try {
+        importStatus = null
+        val status = try {
             withContext(Dispatchers.IO) {
                 val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
-                    ?: return@withContext
+                    ?: return@withContext ImportStatus(CSV_UNREADABLE_MESSAGE, failed = true)
                 val parsed = parseDailyCsv(text)
-                if (parsed.rows.isEmpty()) return@withContext
+                if (parsed.rows.isEmpty()) return@withContext ImportStatus(CSV_UNREADABLE_MESSAGE, failed = true)
                 val existing = dao.getRange(profileId, "0000-01-01", today).toCsvRows()
                 val importedDates = parsed.rows.map { it.dateIso }.toSet()
                 mergeImported(existing, parsed.rows)
                     .filter { it.dateIso in importedDates }
                     .forEach { dao.upsert(it.toStepDayEntity(profileId)) }
+                importSummary(importedDates.size, parsed.errors)
             }
         } catch (e: Exception) {
             Log.w("StepwiseImport", "CSV import failed", e)
+            ImportStatus(CSV_UNREADABLE_MESSAGE, failed = true)
         }
+        importStatus = status
+    }
+
+    /** Message for a finished import: days imported, and the skipped rows with the first error. */
+    private fun importSummary(days: Int, errors: List<String>): ImportStatus {
+        val imported = "Imported $days ${if (days == 1) "day" else "days"}."
+        val first = errors.firstOrNull()
+            ?: return ImportStatus(imported, failed = false)
+        val skipped = errors.size
+        val rows = if (skipped == 1) "row" else "rows"
+        return ImportStatus("$imported $skipped $rows skipped: $first", failed = false)
     }
 
     private fun hasActivityRecognition(): Boolean =

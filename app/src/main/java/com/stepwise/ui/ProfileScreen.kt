@@ -120,6 +120,10 @@ fun ProfileScreen(
     onExportCsv: () -> Unit = {},
     onImportCsv: (String) -> Unit = {},
     onPickCsv: (Uri) -> Unit = {},
+    /** Outcome of the last CSV import, shown under the Import CSV button. Null shows nothing. */
+    importMessage: String? = null,
+    /** True when [importMessage] reports a failed import, shown in the error colour. */
+    importFailed: Boolean = false,
     hasRecordedData: Boolean = false,
     profiles: List<ProfileState> = emptyList(),
     activeId: String? = null,
@@ -418,6 +422,17 @@ fun ProfileScreen(
                             .pressScale(importSource),
                     ) {
                         Text("Import CSV")
+                    }
+                    importMessage?.let {
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (importFailed) {
+                                MaterialTheme.colorScheme.error
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
+                        )
                     }
                     OutlinedButton(
                         onClick = { confirmDeleteProfile = true },
