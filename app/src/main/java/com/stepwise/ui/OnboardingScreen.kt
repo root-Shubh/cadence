@@ -33,6 +33,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -166,7 +168,8 @@ fun OnboardingFlow(
         }
     }
 
-    Box(modifier = modifier.fillMaxSize().padding(16.dp), contentAlignment = Alignment.TopCenter) {
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onBackground) {
+    Box(modifier = modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).padding(16.dp), contentAlignment = Alignment.TopCenter) {
         Column(
             modifier = Modifier.widthIn(max = 480.dp).fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -275,6 +278,7 @@ fun OnboardingFlow(
                 }
             }
         }
+    }
     }
 }
 
