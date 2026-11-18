@@ -130,6 +130,17 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // GPS runs while the app is in the foreground, so a lock is ready before a walk or route.
+        lifecycle.addObserver(androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_RESUME -> com.cadence.gps.GpsWarm.start(this)
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE -> {
+                    // Keep GPS running while recording, even with the app in the background.
+                    if (!com.cadence.steps.LiveSteps.tracking.value) com.cadence.gps.GpsWarm.stop()
+                }
+                else -> Unit
+            }
+        })
         enableEdgeToEdge()
         // Leave the splash theme for the normal app theme once the Activity is up.
         setTheme(R.style.Theme_Stepwise)
