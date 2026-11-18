@@ -116,6 +116,7 @@ fun ProfileScreen(
     onThemeChange: (ThemeChoice) -> Unit = {},
     onDeleteProfile: () -> Unit = {},
     onDeleteAllData: () -> Unit = {},
+    onResetToFreshInstall: () -> Unit = {},
     onExportCsv: () -> Unit = {},
     onImportCsv: (String) -> Unit = {},
     onPickCsv: (Uri) -> Unit = {},
@@ -156,6 +157,8 @@ fun ProfileScreen(
     }
     val deleteProfileSource = remember { MutableInteractionSource() }
     val deleteDataSource = remember { MutableInteractionSource() }
+    val resetSource = remember { MutableInteractionSource() }
+    var confirmReset by remember { mutableStateOf(false) }
 
     val estimate = profileEstimate(
         heightCm = height.trim().toDoubleOrNull(),
@@ -444,6 +447,20 @@ fun ProfileScreen(
                     ) {
                         Text("Delete all recorded data")
                     }
+                    OutlinedButton(
+                        onClick = { confirmReset = true },
+                        interactionSource = resetSource,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .pressScale(resetSource),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error,
+                        ),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
+                    ) {
+                        Text("Reset app to fresh install")
+                    }
                 }
             }
         }
@@ -476,6 +493,41 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { confirmDeleteProfile = false }) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    if (confirmReset) {
+        AlertDialog(
+            onDismissRequest = { confirmReset = false },
+            title = { Text("Reset app to fresh install?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "This deletes all profiles, step history, goals, settings and onboarding progress. " +
+                            "The app will start over as on a fresh install.",
+                    )
+                    DeleteAdviceBlock(advice = deleteAdvice(hasRecordedData), onExportCsv = onExportCsv)
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        confirmReset = false
+                        onResetToFreshInstall()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError,
+                    ),
+                ) {
+                    Text("Reset everything")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmReset = false }) {
                     Text("Cancel")
                 }
             },

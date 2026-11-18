@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.stepwise.data.DEFAULT_PROFILE_ID
 import com.stepwise.data.DataReset
+import com.stepwise.data.resetToFreshInstall
 import com.stepwise.data.PrivacyPrefs
 import com.stepwise.data.ProfileState
 import com.stepwise.data.ProfileStore
@@ -311,6 +312,12 @@ class MainActivity : ComponentActivity() {
                             },
                             onDeleteAllData = {
                                 scope.launch { dataReset.deleteAllRecordedData() }
+                            },
+                            onResetToFreshInstall = {
+                                scope.launch {
+                                    resetToFreshInstall(applicationContext, dataReset)
+                                    this@MainActivity.recreate()
+                                }
                             },
                             onExportCsv = {
                                 scope.launch {

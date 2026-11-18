@@ -362,6 +362,7 @@ fun CalibrateScreen(
             Text(
                 "GPS works offline. No location or step data is sent anywhere.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
