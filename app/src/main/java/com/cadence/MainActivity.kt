@@ -93,6 +93,7 @@ import com.cadence.goals.StepPoint
 import com.cadence.ui.AppShell
 import com.cadence.ui.CalibrateScreen
 import com.cadence.ui.Destination
+import com.cadence.widget.EXTRA_DESTINATION
 import com.cadence.ui.PrivacyNotice
 import com.cadence.ui.ProfileScreen
 import com.cadence.ui.StepwiseTheme
@@ -179,7 +180,7 @@ class MainActivity : ComponentActivity() {
                         lifecycleForGps.lifecycle.removeObserver(observer)
                     }
                 }
-                var selected by rememberSaveable { mutableStateOf(Destination.TODAY) }
+                var selected by rememberSaveable { mutableStateOf(initialDestination()) }
                 var profileState by remember { mutableStateOf(profileStore.load()) }
                 var profiles by remember { mutableStateOf(profileStore.listProfiles()) }
                 var activeId by remember { mutableStateOf(profileStore.activeProfileId()) }
@@ -527,6 +528,12 @@ class MainActivity : ComponentActivity() {
         val rows = if (skipped == 1) "row" else "rows"
         return ImportStatus("$imported $skipped $rows skipped: $first", failed = false)
     }
+
+    /** Tab named by a widget's "destination" extra, or Today when absent or unknown. */
+    private fun initialDestination(): Destination =
+        intent?.getStringExtra(EXTRA_DESTINATION)
+            ?.let { name -> Destination.values().firstOrNull { it.name == name } }
+            ?: Destination.TODAY
 
     private fun hasActivityRecognition(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
