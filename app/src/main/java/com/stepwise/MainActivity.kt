@@ -46,6 +46,8 @@ import com.stepwise.export.buildDailyCsv
 import com.stepwise.export.csvFileName
 import com.stepwise.steps.StepCounterService
 import com.stepwise.steps.StepSensorState
+import com.stepwise.steps.resumeCountingIfNeeded
+import com.stepwise.steps.setCountingOn
 import com.stepwise.steps.StepTrackingSource
 import com.stepwise.steps.countingStatus
 import com.stepwise.steps.describeCountingStatus
@@ -90,6 +92,8 @@ class MainActivity : ComponentActivity() {
         val privacyPrefs = PrivacyPrefs(applicationContext)
         val goalsStore = GoalsStore(applicationContext)
         val onboardingPrefs = OnboardingPrefs(applicationContext)
+        // Restarts counting if the user left it on and the permission and sensor are present.
+        val countingResumed = resumeCountingIfNeeded(applicationContext)
 
         setContent {
             var themeChoice by remember { mutableStateOf(themePrefs.load()) }
@@ -111,7 +115,7 @@ class MainActivity : ComponentActivity() {
                     activeId = profileStore.activeProfileId()
                     profileState = profileStore.load()
                 }
-                var trackingActive by rememberSaveable { mutableStateOf(false) }
+                var trackingActive by rememberSaveable { mutableStateOf(countingResumed) }
                 var sensorMissing by rememberSaveable { mutableStateOf(false) }
                 var privacyHidden by rememberSaveable { mutableStateOf(false) }
                 var goals by remember { mutableStateOf(goalsStore.load()) }
@@ -134,7 +138,7 @@ class MainActivity : ComponentActivity() {
                         sensorMissing = true
                         return
                     }
-                    StepCounterService.start(applicationContext)
+                    setCountingOn(applicationContext, true)
                     trackingActive = true
                 }
 
