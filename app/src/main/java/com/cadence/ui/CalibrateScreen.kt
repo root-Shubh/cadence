@@ -428,6 +428,7 @@ fun CalibrateScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                     Text("Satellites in view: ${warm.inView}, used in fix: ${warm.used}", style = MaterialTheme.typography.bodySmall)
+                    Text("GPS works best outdoors with a clear sky. It locks faster when the phone is online.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Text(
                         "Accuracy: " + (warm.accuracyM?.let { "%.0f m".format(it) } ?: "none yet"),
                         style = MaterialTheme.typography.bodySmall,
