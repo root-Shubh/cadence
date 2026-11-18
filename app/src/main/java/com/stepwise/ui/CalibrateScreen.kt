@@ -9,11 +9,16 @@ import android.location.LocationListener
 import android.location.LocationManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
@@ -28,7 +33,9 @@ import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
@@ -49,6 +56,7 @@ fun CalibrateScreen(
         context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     }
     val walk = remember { WalkHolder() }
+    val buttonSource = remember { MutableInteractionSource() }
 
     var walking by remember { mutableStateOf(false) }
     var permissionDenied by remember { mutableStateOf(false) }
@@ -111,106 +119,162 @@ fun CalibrateScreen(
         modifier = modifier
             .fillMaxWidth()
             .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text("Calibrate stride", style = MaterialTheme.typography.titleLarge)
-        Text(
-            "Walk a measured route of at least 50 m and 50 steps, then press Stop. " +
-                "Your stride length is calculated from the distance and steps.",
-            style = MaterialTheme.typography.bodyMedium,
-        )
+        Reveal(index = 0, modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Calibrate stride", style = MaterialTheme.typography.titleLarge)
+                Text(
+                    "Walk a measured route of at least 50 m and 50 steps, then press Stop. " +
+                        "Your stride length is calculated from the distance and steps.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+        }
 
         if (permissionDenied) {
-            Text(
-                "Location permission was denied. Allow location for Stepwise in system settings to calibrate.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.error,
-            )
+            Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Location permission was denied. Allow location for Stepwise in system settings to calibrate.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.error,
+                )
+            }
         }
 
-        StatCard(label = "Distance", value = "${"%.0f".format(distanceM)} m")
-        StatCard(label = "Steps during walk", value = "$liveSteps")
+        Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
+            StatCard(
+                label = "Distance",
+                icon = Icons.Filled.Route,
+                tone = Tone.TERTIARY,
+                value = {
+                    AnimatedCountText(
+                        value = Math.round(distanceM).toInt(),
+                        suffix = " m",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                },
+            )
+        }
+        Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
+            StatCard(
+                label = "Steps during walk",
+                icon = Icons.AutoMirrored.Filled.DirectionsWalk,
+                tone = Tone.PRIMARY,
+                value = {
+                    AnimatedCountText(
+                        value = liveSteps,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                },
+            )
+        }
 
         if (!walking && message == null) {
+            Reveal(index = 4, modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    "Your stride is estimated from your height until you calibrate.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+
+        Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
+            if (walking) {
+                OutlinedButton(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    interactionSource = buttonSource,
+                    onClick = {
+                        walking = false
+                        val steps = currentSteps() - startSteps
+                        liveSteps = steps
+                        when (val result = strideFromWalk(distanceM, steps)) {
+                            is StrideResult.Success -> {
+                                saveStride(result.strideCm)
+                                message = "Stride saved: ${"%.1f".format(result.strideCm)} cm"
+                            }
+                            is StrideResult.Rejected -> message = "Not saved: ${result.reason}"
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .pressScale(buttonSource),
+                ) {
+                    Text("Stop")
+                }
+            } else {
+                Button(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    interactionSource = buttonSource,
+                    onClick = {
+                        message = null
+                        if (hasLocationPermission(context)) {
+                            walk.distance = GpsDistance()
+                            distanceM = 0.0
+                            startSteps = currentSteps()
+                            liveSteps = 0
+                            walking = true
+                        } else {
+                            permissionLauncher.launch(
+                                arrayOf(
+                                    Manifest.permission.ACCESS_FINE_LOCATION,
+                                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                                ),
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = 56.dp)
+                        .pressScale(buttonSource),
+                ) {
+                    Text("Start")
+                }
+            }
+        }
+
+        message?.let {
+            Reveal(index = 6, modifier = Modifier.fillMaxWidth()) {
+                Text(it, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+
+        Reveal(index = 7, modifier = Modifier.fillMaxWidth()) {
             Text(
-                "Your stride is estimated from your height until you calibrate.",
+                "GPS works offline. No location or step data is sent anywhere.",
                 style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-
-        if (walking) {
-            OutlinedButton(
-                shape = MaterialTheme.shapes.extraLarge,
-                onClick = {
-                    walking = false
-                    val steps = currentSteps() - startSteps
-                    liveSteps = steps
-                    when (val result = strideFromWalk(distanceM, steps)) {
-                        is StrideResult.Success -> {
-                            saveStride(result.strideCm)
-                            message = "Stride saved: ${"%.1f".format(result.strideCm)} cm"
-                        }
-                        is StrideResult.Rejected -> message = "Not saved: ${result.reason}"
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-            ) {
-                Text("Stop")
-            }
-        } else {
-            Button(
-                shape = MaterialTheme.shapes.extraLarge,
-                onClick = {
-                    message = null
-                    if (hasLocationPermission(context)) {
-                        walk.distance = GpsDistance()
-                        distanceM = 0.0
-                        startSteps = currentSteps()
-                        liveSteps = 0
-                        walking = true
-                    } else {
-                        permissionLauncher.launch(
-                            arrayOf(
-                                Manifest.permission.ACCESS_FINE_LOCATION,
-                                Manifest.permission.ACCESS_COARSE_LOCATION,
-                            ),
-                        )
-                    }
-                },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 48.dp),
-            ) {
-                Text("Start")
-            }
-        }
-
-        message?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
-
-        Text(
-            "GPS works offline. No location or step data is sent anywhere.",
-            style = MaterialTheme.typography.bodySmall,
-        )
     }
 }
 
-/** Label (bodyMedium, onSurfaceVariant) above a headlineSmall value, inside a card. */
+/** Icon chip, label (bodyMedium, onSurfaceVariant) and a headline value, inside a card. */
 @Composable
-private fun StatCard(label: String, value: String) {
+private fun StatCard(
+    label: String,
+    icon: ImageVector,
+    tone: Tone,
+    value: @Composable () -> Unit,
+) {
     Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
+        Row(
             modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(value, style = MaterialTheme.typography.headlineSmall)
+            IconChip(icon = icon, tone = tone)
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    label,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                value()
+            }
         }
     }
 }

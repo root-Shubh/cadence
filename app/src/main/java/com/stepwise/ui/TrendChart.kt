@@ -1,5 +1,7 @@
 package com.stepwise.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -9,7 +11,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -45,6 +51,14 @@ fun TrendChart(
     val baselineColor = MaterialTheme.colorScheme.outlineVariant
     val missingColor = MaterialTheme.colorScheme.outlineVariant
     val fractions = barFractions(series.map { it.steps })
+    // Bars grow from zero on first show: this factor eases from 0 to 1 once.
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+    val growth by animateFloatAsState(
+        targetValue = if (shown) 1f else 0f,
+        animationSpec = tween(MOTION_BAR_MS),
+        label = "barGrowth",
+    )
     val todayIso = remember { LocalDate.now().toString() }
     val labelIndices = remember(series.size, weekdayLabels) {
         if (weekdayLabels) emptySet() else axisLabelIndices(series.size, MONTH_AXIS_STEP).toSet()
@@ -72,6 +86,7 @@ fun TrendChart(
             val barWidth = slot * BAR_FILL
             val baselineY = size.height - BASELINE_THICKNESS.toPx() / 2f
             val baselineStroke = BASELINE_THICKNESS.toPx()
+            val grow = growth
 
             series.forEachIndexed { index, point ->
                 val left = index * slot + (slot - barWidth) / 2f
@@ -84,7 +99,7 @@ fun TrendChart(
                     )
                 } else {
                     val fraction = fractions[index]
-                    val barHeight = (size.height - baselineStroke) * fraction
+                    val barHeight = (size.height - baselineStroke) * fraction * grow
                     drawRect(
                         color = barColor,
                         topLeft = Offset(left, size.height - baselineStroke - barHeight),
