@@ -27,7 +27,10 @@ class StepDetectorSource(
     fun start(): Boolean {
         if (registered) return true
         val manager = sensorManager ?: return false
-        val sensor = manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR) ?: return false
+        // Prefer the wake-up variant so steps arrive while the phone is locked.
+        val sensor = manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR, true)
+            ?: manager.getDefaultSensor(Sensor.TYPE_STEP_DETECTOR)
+            ?: return false
         // Maximum report latency 0: each step is delivered as it happens, without batching.
         registered = manager.registerListener(this, sensor, SensorManager.SENSOR_DELAY_FASTEST, 0)
         return registered

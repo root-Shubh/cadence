@@ -38,7 +38,7 @@ class ThemePrefs(context: Context) {
     }
 
     private companion object {
-        const val PREFS_NAME = "stepwise_theme"
+        const val PREFS_NAME = "cadence_theme"
         const val KEY_THEME = "theme_choice"
     }
 }

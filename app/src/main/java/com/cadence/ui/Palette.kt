@@ -1,8 +1,8 @@
 package com.cadence.ui
 
 /**
- * Stepwise colour tokens as ARGB Long values. Pure Kotlin (no Compose imports) so that
- * contrast tests can read the exact values that [StepwiseTheme] uses.
+ * Cadence colour tokens as ARGB Long values. Pure Kotlin (no Compose imports) so that
+ * contrast tests can read the exact values that [CadenceTheme] uses.
  */
 object LightPalette {
     const val primary = 0xFF1B7F6BL

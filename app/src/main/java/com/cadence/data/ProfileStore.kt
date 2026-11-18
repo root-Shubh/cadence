@@ -155,7 +155,7 @@ class ProfileStore(context: Context) {
     }
 
     private companion object {
-        const val PREFS_NAME = "stepwise_profile"
+        const val PREFS_NAME = "cadence_profile"
         const val KEY_PROFILES = "profiles_v2"
         const val KEY_ACTIVE = "active_profile_id"
         const val LEGACY_HEIGHT = "height_cm"

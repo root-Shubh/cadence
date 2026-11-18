@@ -1,7 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Widget surface: white with a soft mint tint in the top corner. -->
+    <color name="widget_surface">#FFFFFF</color>
+    <color name="widget_surface_tint">#E3F4EE</color>
+    <color name="widget_outline">#1A1B7F6B</color>
+
+    <color name="widget_text_primary">#10251F</color>
+    <color name="widget_text_secondary">#55706A</color>
+
+    <!-- Accent: rings, progress, the Start button. -->
     <color name="widget_ring_progress">#1B7F6B</color>
-    <color name="widget_ring_track">#D5E9E3</color>
-    <color name="widget_text_primary">#16302A</color>
-    <color name="widget_text_secondary">#4A6661</color>
+    <color name="widget_ring_track">#D7EAE4</color>
+    <color name="widget_accent_on">#FFFFFF</color>
+
+    <!-- The start/stop button while counting runs. -->
+    <color name="widget_stop">#C2412D</color>
+    <color name="widget_stop_on">#FFFFFF</color>
 </resources>

@@ -33,6 +33,15 @@ class WidgetTextTest {
     }
 
     @Test
+    fun percentTextShowsShareOfGoalOrNothing() {
+        assertEquals("64%", widgetPercentText(5_120, 8_000))
+        assertEquals("125%", widgetPercentText(10_000, 8_000))
+        assertEquals("0%", widgetPercentText(-5, 8_000))
+        assertEquals("", widgetPercentText(5_000, null))
+        assertEquals("", widgetPercentText(5_000, 0))
+    }
+
+    @Test
     fun progressIsStepsWithinGoal() {
         assertEquals(2_500, widgetProgress(2_500, 10_000))
     }

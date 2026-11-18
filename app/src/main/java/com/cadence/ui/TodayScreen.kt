@@ -125,12 +125,6 @@ fun TodayScreen(
             Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     GoalCardsPager(
-                        gallery = {
-                            DailyPatternGallery(
-                                profileId = activeProfileId,
-                                recording = isRecording,
-                            )
-                        },
                         dailyCard = {
                             HeroStepCard(
                                 steps = steps,
@@ -387,11 +381,17 @@ private fun HeroStepCard(
                     )
                 }
 
-                RecordChip(
-                    isRecording = isRecording,
-                    onToggle = onToggleRecording,
+                Row(
                     modifier = Modifier.padding(top = 8.dp),
-                )
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RecordChip(
+                        isRecording = isRecording,
+                        onToggle = onToggleRecording,
+                    )
+                    // How to carry the phone: one tap away, beside Record.
+                    CarryInfoButton(tint = MaterialTheme.colorScheme.onPrimaryContainer)
+                }
             }
             Box(
                 modifier = Modifier

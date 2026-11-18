@@ -75,7 +75,7 @@ class CsvExportTest {
 
     @Test
     fun fileNameFormat() {
-        assertEquals("stepwise-export-2026-11-18.csv", csvFileName("2026-11-18"))
+        assertEquals("cadence-export-2026-11-18.csv", csvFileName("2026-11-18"))
     }
 
     @Test

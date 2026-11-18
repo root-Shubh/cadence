@@ -1,4 +1,4 @@
-# Contributing to Stepwise
+# Contributing to Cadence
 
 ## Process
 

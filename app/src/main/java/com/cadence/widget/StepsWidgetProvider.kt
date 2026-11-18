@@ -47,8 +47,7 @@ class StepsWidgetProvider : AppWidgetProvider() {
                     appWidgetManager.updateAppWidget(id, buildViews(appContext, fallback))
                 }
             } finally {
-                // This update comes from the step service, so the other widgets follow the steps too.
-                runCatching { refreshStepDependentWidgetsIfDue(appContext) }
+                // The step service redraws all three widgets itself (requestAllWidgetsRefresh).
                 pending.finish()
             }
         }
@@ -69,6 +68,7 @@ class StepsWidgetProvider : AppWidgetProvider() {
         val max = snapshot.goal?.takeIf { it > 0 } ?: WIDGET_DEFAULT_MAX
         views.setTextViewText(R.id.widget_steps, widgetStepsText(snapshot.steps))
         views.setTextViewText(R.id.widget_goal, widgetGoalText(snapshot.steps, snapshot.goal))
+        views.setTextViewText(R.id.widget_percent, widgetPercentText(snapshot.steps, snapshot.goal))
         views.setProgressBar(R.id.widget_progress, max, widgetProgress(snapshot.steps, max), false)
         val open = Intent(context, MainActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)

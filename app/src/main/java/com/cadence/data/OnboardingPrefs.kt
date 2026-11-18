@@ -4,7 +4,7 @@ import android.content.Context
 import android.content.SharedPreferences
 
 /**
- * Onboarding flags in SharedPreferences "stepwise_onboarding": whether the first-launch flow
+ * Onboarding flags in SharedPreferences "cadence_onboarding": whether the first-launch flow
  * is finished, and when the onboarding profile was saved (epoch millis, for the review banner).
  * Every access is guarded: a failed read returns the default, a failed write is dropped.
  */
@@ -46,7 +46,7 @@ class OnboardingPrefs(context: Context) {
     }
 
     private companion object {
-        const val PREFS_NAME = "stepwise_onboarding"
+        const val PREFS_NAME = "cadence_onboarding"
         const val KEY_DONE = "onboarding_done"
         const val KEY_SAVED_AT = "profile_saved_at"
     }

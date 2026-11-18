@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources xmlns:tools="http://schemas.android.com/tools">
 
-    <style name="Theme.Stepwise.Starting" parent="android:Theme.Material.NoActionBar" tools:targetApi="31">
+    <style name="Theme.Cadence.Starting" parent="android:Theme.Material.NoActionBar" tools:targetApi="31">
         <item name="android:windowBackground">@drawable/ic_splash_layers</item>
         <item name="android:windowSplashScreenBackground">@color/splash_background</item>
         <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
         <item name="android:windowSplashScreenAnimationDuration">600</item>
     </style>
 
-    <style name="Theme.Stepwise" parent="android:Theme.Material.NoActionBar">
+    <style name="Theme.Cadence" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/app_background</item>
     </style>
 

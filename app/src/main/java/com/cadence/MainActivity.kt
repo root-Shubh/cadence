@@ -96,7 +96,8 @@ import com.cadence.ui.Destination
 import com.cadence.widget.EXTRA_DESTINATION
 import com.cadence.ui.PrivacyNotice
 import com.cadence.ui.ProfileScreen
-import com.cadence.ui.StepwiseTheme
+import com.cadence.ui.CadenceTheme
+import com.cadence.ui.PatternScreen
 import com.cadence.ui.TodayScreen
 import com.cadence.ui.TrendScreen
 import kotlinx.coroutines.delay
@@ -143,7 +144,7 @@ class MainActivity : ComponentActivity() {
         })
         enableEdgeToEdge()
         // Leave the splash theme for the normal app theme once the Activity is up.
-        setTheme(R.style.Theme_Stepwise)
+        setTheme(R.style.Theme_Cadence)
         // The launch theme sets the splash mark as the window background; replace it so it never shows behind the content.
         window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(getColor(R.color.app_background)))
         val profileStore = ProfileStore(applicationContext)
@@ -165,7 +166,7 @@ class MainActivity : ComponentActivity() {
                 ThemeChoice.SYSTEM -> isSystemInDarkTheme()
             }
 
-            StepwiseTheme(darkTheme = darkTheme) {
+            CadenceTheme(darkTheme = darkTheme) {
                 val scope = rememberCoroutineScope()
                 // App-wide GPS state: warn whenever location is off while the app is open.
                 var gpsOff by remember { mutableStateOf(!isGpsOn()) }
@@ -297,9 +298,9 @@ class MainActivity : ComponentActivity() {
                 }
                 // Turns recording off, or on through the same permission and sensor checks as Start.
                 val toggleRecording: () -> Unit = {
-                    // Recording means the service is really counting. A stale flag must not turn
-                    // the press into a stop, so a press starts counting unless the service is running.
-                    if (trackingActive && LiveSteps.tracking.value) {
+                    // Recording means the service is really counting, the same state the button shows.
+                    // A stale flag must not turn the press into a stop, or a running service into a start.
+                    if (LiveSteps.tracking.value) {
                         setCountingOn(applicationContext, false)
                         trackingActive = false
                     } else if (hasActivityRecognition()) {
@@ -358,7 +359,8 @@ class MainActivity : ComponentActivity() {
                                     monthlyGoal = eff.monthlySteps,
                                     history = history,
                                     trackingActive = trackingActive,
-                                    isRecording = trackingActive,
+                                    // The service's live state: true only while it really counts.
+                                    isRecording = liveTracking,
                                     activeProfileId = activeId ?: DEFAULT_PROFILE_ID,
                                     onToggleRecording = toggleRecording,
                                     notificationsOff = notificationsOff,
@@ -384,6 +386,10 @@ class MainActivity : ComponentActivity() {
                             modifier = modifier,
                             dailyGoal = eff.dailySteps,
                             weeklyGoal = eff.weeklySteps,
+                        )
+                        Destination.PATTERN -> PatternScreen(
+                            profileId = activeId ?: DEFAULT_PROFILE_ID,
+                            modifier = modifier,
                         )
                         Destination.PROFILE -> key(activeId) { ProfileScreen(
                             initial = profileState,
@@ -529,7 +535,7 @@ class MainActivity : ComponentActivity() {
                 importSummary(importedDates.size, parsed.errors)
             }
         } catch (e: Exception) {
-            Log.w("StepwiseImport", "CSV import failed", e)
+            Log.w("CadenceImport", "CSV import failed", e)
             ImportStatus(CSV_UNREADABLE_MESSAGE, failed = true)
         }
         importStatus = status

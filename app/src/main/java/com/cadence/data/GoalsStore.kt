@@ -82,7 +82,7 @@ class GoalsStore(context: Context) {
     }
 
     private companion object {
-        const val PREFS_NAME = "stepwise_goals"
+        const val PREFS_NAME = "cadence_goals"
         const val KEY_DAILY = "daily"
         const val KEY_WEEKLY = "weekly"
         const val KEY_MONTHLY = "monthly"

@@ -16,12 +16,6 @@ import com.cadence.steps.stepTrackingSource
 import java.time.LocalDate
 import java.time.ZoneId
 
-/** Minimum gap between redraws of the goals and start/stop widgets driven by step changes. */
-const val GOALS_MIN_INTERVAL_MS = 60_000L
-
-private val refreshLock = Any()
-private var lastStepDrivenRefreshMs = 0L
-
 /** One period's steps and goal. [goal] is null when no goal is set for that period. */
 data class PeriodProgress(val steps: Int, val goal: Int?)
 
@@ -95,22 +89,4 @@ suspend fun refreshGoalsWidgets(context: Context, ids: IntArray? = null) {
     }
     val views = GoalsWidgetProvider.buildViews(context, snapshot)
     for (id in target) manager.updateAppWidget(id, views)
-}
-
-/**
- * Called when the step service reports a change. Redraws the goals and start/stop widgets, at most
- * once per [GOALS_MIN_INTERVAL_MS].
- */
-suspend fun refreshStepDependentWidgetsIfDue(context: Context) {
-    val now = System.currentTimeMillis()
-    val due = synchronized(refreshLock) {
-        val elapsed = now - lastStepDrivenRefreshMs
-        if (elapsed in 0 until GOALS_MIN_INTERVAL_MS) {
-            false
-        } else {
-            lastStepDrivenRefreshMs = now
-            true
-        }
-    }
-    if (due) refreshAllWidgets(context)
 }

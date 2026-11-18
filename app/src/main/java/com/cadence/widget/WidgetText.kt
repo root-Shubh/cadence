@@ -16,6 +16,12 @@ fun widgetGoalText(steps: Int, goal: Int?): String {
     return "of ${String.format(Locale.ROOT, "%,d", goal)} goal"
 }
 
+/** "64%" of the daily goal for the steps widget, or empty when no goal is set. Not capped at 100. */
+fun widgetPercentText(steps: Int, goal: Int?): String {
+    if (goal == null || goal <= 0) return ""
+    return "${maxOf(0, steps).toLong() * 100 / goal}%"
+}
+
 /** Progress value for a progress bar whose maximum is [goal], clamped to 0..goal. */
 fun widgetProgress(steps: Int, goal: Int): Int {
     if (goal <= 0) return 0

@@ -36,8 +36,10 @@ class GoalsWidgetProvider : AppWidgetProvider() {
         private const val REQUEST_RING_DAILY = 21
         private const val REQUEST_RING_WEEKLY = 22
         private const val REQUEST_RING_MONTHLY = 23
-        private const val RING_PX = 144
-        private const val RING_STROKE_PX = 16f
+        // 192 px keeps the 64 dp rings sharp on high-density screens while the three bitmaps stay
+        // well under the 1 MB limit of a widget update.
+        private const val RING_PX = 192
+        private const val RING_STROKE_PX = 18f
 
         internal fun buildViews(context: Context, snapshot: GoalsSnapshot): RemoteViews {
             val views = RemoteViews(context.packageName, R.layout.widget_goals)

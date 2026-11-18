@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Picker preview for Android 11 and older (12+ shows the real layout). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="160dp"
+    android:height="160dp"
+    android:viewportWidth="160"
+    android:viewportHeight="160">
+    <path
+        android:fillColor="#E3F4EE"
+        android:pathData="M24,0H136A24,24 0 0,1 160,24V136A24,24 0 0,1 136,160H24A24,24 0 0,1 0,136V24A24,24 0 0,1 24,0Z" />
+    <path
+        android:fillColor="#10251F"
+        android:pathData="M18,70h90v24h-90z" />
+    <path
+        android:fillColor="#55706A"
+        android:pathData="M18,20h60v8h-60z M18,102h70v6h-70z" />
+    <path
+        android:fillColor="#D7EAE4"
+        android:pathData="M24,124H136A6,6 0 0,1 142,130A6,6 0 0,1 136,136H24A6,6 0 0,1 18,130A6,6 0 0,1 24,124Z" />
+    <path
+        android:fillColor="#1B7F6B"
+        android:pathData="M24,124H100A6,6 0 0,1 106,130A6,6 0 0,1 100,136H24A6,6 0 0,1 18,130A6,6 0 0,1 24,124Z" />
+</vector>
