@@ -91,8 +91,6 @@ import com.cadence.ui.shouldShowOnboarding
 import com.cadence.ui.shouldShowReviewBanner
 import com.cadence.goals.StepPoint
 import com.cadence.ui.AppShell
-import com.cadence.ui.GoalsCard
-import com.cadence.ui.GoalsEditor
 import com.cadence.ui.CalibrateScreen
 import com.cadence.ui.Destination
 import com.cadence.ui.PrivacyNotice
@@ -331,13 +329,6 @@ class MainActivity : ComponentActivity() {
                                         },
                                     )
                                 }
-                                GoalsCard(
-                                    points = history.map { StepPoint(it.dateIso, it.steps) },
-                                    goals = effectiveGoals(goals),
-                                    todayIso = today,
-                                    modifier = Modifier.padding(horizontal = 16.dp),
-                                    onSetGoals = { selected = Destination.PROFILE },
-                                )
                                 TodayScreen(
                                     day = todayDayMetrics(
                                         todayRow,
@@ -452,16 +443,13 @@ class MainActivity : ComponentActivity() {
                                 nowMillis = System.currentTimeMillis(),
                                 missingFields = missingProfileFields(profileState),
                             ),
-                            goalsSection = {
-                                GoalsEditor(
-                                    current = goals,
-                                    onSave = { updated ->
-                                        goalsStore.save(updated)
-                                        goals = updated
-                                    },
-                                    modifier = Modifier.padding(top = 16.dp),
-                                )
+                            goals = goals,
+                            onSaveGoals = { updated ->
+                                goalsStore.save(updated)
+                                goals = updated
                             },
+                            goalPoints = history.map { StepPoint(it.dateIso, it.steps) },
+                            goalsTodayIso = today,
                         ) }
                         Destination.CALIBRATE -> CalibrateScreen(
                             saveStride = { cm ->

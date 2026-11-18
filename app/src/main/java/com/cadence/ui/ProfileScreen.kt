@@ -73,6 +73,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.cadence.data.ProfileState
+import com.cadence.goals.Goals
+import com.cadence.goals.StepPoint
+import java.time.LocalDate
 import com.cadence.data.ThemeChoice
 import com.cadence.data.deleteAdvice
 import com.cadence.data.validateProfile
@@ -132,8 +135,16 @@ fun ProfileScreen(
     onRenameProfile: (String, String) -> Unit = { _, _ -> },
     onDeleteActiveProfile: () -> Unit = {},
     goalsSection: @Composable () -> Unit = {},
+    /** Stored goals. Null hides the goals card. The card summarises the effective goals. */
+    goals: Goals? = null,
+    onSaveGoals: (Goals) -> Unit = {},
+    /** Step history used by the goals summary. */
+    goalPoints: List<StepPoint> = emptyList(),
+    goalsTodayIso: String = LocalDate.now().toString(),
     showReviewBanner: Boolean = false,
 ) {
+    val goalsBounds = remember { GoalsCardBounds() }
+    var goalsExpanded by rememberSaveable { mutableStateOf(false) }
     // The form reloads whenever the active profile changes. A new profile has zero values,
     // which show as blank fields.
     val formKey = activeId ?: initial?.id
@@ -184,7 +195,8 @@ fun ProfileScreen(
         modifier = modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+            .padding(16.dp)
+            .collapseOnTapOutside(goalsBounds, goalsExpanded) { goalsExpanded = false },
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Column(
@@ -211,6 +223,20 @@ fun ProfileScreen(
                     onDeleteActive = onDeleteActiveProfile,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+
+            if (goals != null) {
+                Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                    ProfileGoalsCard(
+                        goals = goals,
+                        points = goalPoints,
+                        todayIso = goalsTodayIso,
+                        expanded = goalsExpanded,
+                        onExpandedChange = { goalsExpanded = it },
+                        onSave = onSaveGoals,
+                        bounds = goalsBounds,
+                    )
+                }
             }
 
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
