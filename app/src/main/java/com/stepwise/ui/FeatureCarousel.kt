@@ -1,7 +1,8 @@
 package com.stepwise.ui
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -14,42 +15,79 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.TrendingUp
-import androidx.compose.material.icons.filled.DirectionsWalk
-import androidx.compose.material.icons.filled.Flag
-import androidx.compose.material.icons.filled.LocalFireDepartment
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
+import com.stepwise.R
 
-/** One feature shown on the welcome carousel. */
-data class WelcomeFeature(val icon: ImageVector, val title: String, val body: String)
+/** One feature shown on the welcome carousel, with a real screenshot of that feature. */
+data class WelcomeFeature(
+    val title: String,
+    val body: String,
+    val image: Int,
+    val imageDark: Int,
+    val imageDescription: String,
+)
 
 /** The features shown on the first onboarding step, in the order they are shown. */
 val welcomeFeatures: List<WelcomeFeature> = listOf(
-    WelcomeFeature(Icons.Filled.DirectionsWalk, "Count every step", "Uses your phone's step sensor. Works offline, no account needed."),
-    WelcomeFeature(Icons.Filled.LocalFireDepartment, "Know your calories", "Resting and walking calories from your height, weight and age."),
-    WelcomeFeature(Icons.AutoMirrored.Filled.TrendingUp, "See your trends", "Week, month and quarter charts, with your best weekdays."),
-    WelcomeFeature(Icons.Filled.Flag, "Set goals", "Daily, weekly and monthly targets, with clear next steps."),
-    WelcomeFeature(Icons.Filled.Straighten, "Calibrate your stride", "Walk a known route with GPS for a more accurate distance."),
-    WelcomeFeature(Icons.Filled.Lock, "Private by design", "Your data never leaves this phone. Delete it any time."),
+    WelcomeFeature(
+        "Count every step",
+        "Uses your phone's step sensor. Works offline, no account needed.",
+        R.drawable.feature_today,
+        R.drawable.feature_today_dark,
+        "Today screen with the step count, distance and calories",
+    ),
+    WelcomeFeature(
+        "Know your calories",
+        "Resting and walking calories from your height, weight and age.",
+        R.drawable.feature_profile,
+        R.drawable.feature_profile_dark,
+        "Profile screen where your height, weight and age set the calorie estimate",
+    ),
+    WelcomeFeature(
+        "See your trends",
+        "Week, month and quarter charts, with your best weekdays.",
+        R.drawable.feature_trend,
+        R.drawable.feature_trend_dark,
+        "Trend screen with a 90-day chart, weekday averages and insights",
+    ),
+    WelcomeFeature(
+        "Set goals",
+        "Daily, weekly and monthly targets, with clear next steps.",
+        R.drawable.feature_today,
+        R.drawable.feature_today_dark,
+        "Goals card on the Today screen with progress and suggestions",
+    ),
+    WelcomeFeature(
+        "Calibrate your stride",
+        "Walk a known route with GPS for a more accurate distance.",
+        R.drawable.feature_calibrate,
+        R.drawable.feature_calibrate_dark,
+        "Calibrate screen for measuring stride with a GPS walk",
+    ),
+    WelcomeFeature(
+        "Private by design",
+        "Your data never leaves this phone. Delete it any time.",
+        R.drawable.feature_profile,
+        R.drawable.feature_profile_dark,
+        "Profile screen with the on-device privacy notice and data controls",
+    ),
 )
 
 /** A swipeable row of feature cards with snapping and position dots. */
@@ -105,24 +143,24 @@ private fun FeatureCard(feature: WelcomeFeature, modifier: Modifier = Modifier) 
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(20.dp),
-            verticalArrangement = Arrangement.SpaceBetween,
-        ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            // The screenshot sits at the top of the card, cropped to a fixed frame so every card lines up.
             Box(
                 modifier = Modifier
-                    .size(64.dp)
-                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                contentAlignment = Alignment.Center,
+                    .fillMaxWidth()
+                    .height(250.dp)
+                    .background(MaterialTheme.colorScheme.background),
             ) {
-                Icon(
-                    imageVector = feature.icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                Image(
+                    painter = painterResource(if (isSystemInDarkTheme()) feature.imageDark else feature.image),
+                    contentDescription = feature.imageDescription,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                    alignment = Alignment.TopCenter,
                 )
             }
-            Column {
-                Text(feature.title, style = MaterialTheme.typography.headlineSmall)
+            Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
+                Text(feature.title, style = MaterialTheme.typography.titleLarge)
                 Spacer(Modifier.height(6.dp))
                 Text(
                     feature.body,
