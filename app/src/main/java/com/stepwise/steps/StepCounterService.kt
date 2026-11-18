@@ -5,6 +5,8 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.Service
+import android.appwidget.AppWidgetManager
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.SharedPreferences
@@ -31,6 +33,7 @@ import com.stepwise.data.StepDayEntity
 import com.stepwise.domain.Profile
 import com.stepwise.domain.Sex
 import com.stepwise.domain.computeDay
+import com.stepwise.widget.StepsWidgetProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -65,6 +68,9 @@ import java.util.concurrent.atomic.AtomicLong
  * Missing sensor: the service stops itself and sets "sensor_missing" in the tracker
  * SharedPreferences so the UI can explain why counting is unavailable.
  */
+/** Shortest time between two home-widget refresh broadcasts, in milliseconds. */
+private const val WIDGET_MIN_INTERVAL_MS: Long = 30_000L
+
 class StepCounterService : Service(), SensorEventListener {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -102,6 +108,7 @@ class StepCounterService : Service(), SensorEventListener {
     // Consumer-only state. Only used inside the consumer coroutine.
     private var flushedRaw: Long? = null
     private var lastWriteMillis = 0L
+    private var lastWidgetBroadcastMillis = 0L
 
     override fun onCreate() {
         super.onCreate()
@@ -357,6 +364,7 @@ class StepCounterService : Service(), SensorEventListener {
             if (raw != null) prefs.edit().putLong(KEY_LAST_RAW, raw).apply()
             flushedRaw = raw
             lastWriteMillis = nowMillis
+            sendWidgetUpdateIfDue(nowMillis)
         } catch (e: CancellationException) {
             softPending.addAndGet(software)
             throw e
@@ -365,6 +373,17 @@ class StepCounterService : Service(), SensorEventListener {
             softPending.addAndGet(software)
             Log.w(TAG, "Failed to record step reading", e)
         }
+    }
+
+    /** Asks the home widget to redraw, at most once per [WIDGET_MIN_INTERVAL_MS]. */
+    private fun sendWidgetUpdateIfDue(nowMillis: Long) {
+        val elapsed = nowMillis - lastWidgetBroadcastMillis
+        if (elapsed in 0 until WIDGET_MIN_INTERVAL_MS) return
+        lastWidgetBroadcastMillis = nowMillis
+        sendBroadcast(
+            Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
+                .setComponent(ComponentName(this, StepsWidgetProvider::class.java)),
+        )
     }
 
     /** Adds [delta] steps to today's row. Runs on the consumer coroutine. */

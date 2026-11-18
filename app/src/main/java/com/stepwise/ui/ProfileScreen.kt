@@ -74,6 +74,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.stepwise.data.ProfileState
 import com.stepwise.data.ThemeChoice
+import com.stepwise.data.deleteAdvice
 import com.stepwise.data.validateProfile
 import kotlinx.coroutines.delay
 
@@ -118,6 +119,7 @@ fun ProfileScreen(
     onExportCsv: () -> Unit = {},
     onImportCsv: (String) -> Unit = {},
     onPickCsv: (Uri) -> Unit = {},
+    hasRecordedData: Boolean = false,
     profiles: List<ProfileState> = emptyList(),
     activeId: String? = null,
     onSelectProfile: (String) -> Unit = {},
@@ -455,7 +457,7 @@ fun ProfileScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("This removes your saved profile. Your step history is kept.")
-                    DeleteAdviceBlock(onExportCsv = onExportCsv)
+                    DeleteAdviceBlock(advice = deleteAdvice(hasRecordedData), onExportCsv = onExportCsv)
                 }
             },
             confirmButton = {
@@ -487,7 +489,7 @@ fun ProfileScreen(
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text("This removes all recorded step history. Your profile is kept.")
-                    DeleteAdviceBlock(onExportCsv = onExportCsv)
+                    DeleteAdviceBlock(advice = deleteAdvice(hasRecordedData), onExportCsv = onExportCsv)
                 }
             },
             confirmButton = {
@@ -515,10 +517,10 @@ fun ProfileScreen(
 
 /** Advice shown inside delete confirmations, with a button that starts the CSV export first. */
 @Composable
-private fun DeleteAdviceBlock(onExportCsv: () -> Unit) {
+private fun DeleteAdviceBlock(advice: String, onExportCsv: () -> Unit) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Export your data as CSV first. Stepwise has no cloud storage, so deleting here cannot be undone.",
+        if (advice.isNotEmpty()) Text(
+            advice,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

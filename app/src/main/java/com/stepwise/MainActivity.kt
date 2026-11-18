@@ -31,7 +31,18 @@ import com.stepwise.data.PrivacyPrefs
 import com.stepwise.data.ProfileState
 import com.stepwise.data.ProfileStore
 import com.stepwise.data.StepDatabase
+import com.stepwise.data.StepDayDao
 import com.stepwise.data.StepDayEntity
+import com.stepwise.export.CsvDailyRow
+import com.stepwise.export.mergeImported
+import com.stepwise.export.parseDailyCsv
+import com.stepwise.goals.effectiveGoals
+import com.stepwise.steps.LiveSteps
+import android.net.Uri
+import android.util.Log
+import androidx.compose.runtime.collectAsState
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.stepwise.data.ThemeChoice
 import com.stepwise.data.ThemePrefs
 import com.stepwise.data.shouldShowPrivacyNotice
@@ -148,6 +159,11 @@ class MainActivity : ComponentActivity() {
                         .collect { rows -> value = rows.firstOrNull() }
                 }
                 val todaySteps = todayRow?.steps ?: 0
+                // Live count from the step service while it runs; the Room row otherwise.
+                val liveSteps by LiveSteps.steps.collectAsState()
+                val liveTracking by LiveSteps.tracking.collectAsState()
+                // Goals with weekly and monthly values filled in from the daily goal.
+                val eff = effectiveGoals(goals)
                 val countingStatusText by produceState<String?>(initialValue = null, trackingActive) {
                     while (true) {
                         value = currentCountingStatusText()
@@ -168,6 +184,17 @@ class MainActivity : ComponentActivity() {
                     ActivityResultContracts.RequestPermission(),
                 ) { granted ->
                     if (granted) startTracking()
+                }
+                // Turns recording off, or on through the same permission and sensor checks as Start.
+                val toggleRecording: () -> Unit = {
+                    if (trackingActive) {
+                        setCountingOn(applicationContext, false)
+                        trackingActive = false
+                    } else if (hasActivityRecognition()) {
+                        startTracking()
+                    } else {
+                        permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                    }
                 }
 
                 if (showOnboarding) OnboardingFlow(
@@ -205,11 +232,15 @@ class MainActivity : ComponentActivity() {
                                     onSetGoals = { selected = Destination.PROFILE },
                                 )
                                 TodayScreen(
-                                    day = todayDayMetrics(todayRow, profile),
+                                    day = todayDayMetrics(todayRow, profile, if (liveTracking) liveSteps else null),
                                     profileMissing = profile == null,
-                                    dailyGoal = goals.dailySteps,
+                                    dailyGoal = eff.dailySteps,
+                                    weeklyGoal = eff.weeklySteps,
+                                    monthlyGoal = eff.monthlySteps,
                                     history = history,
                                     trackingActive = trackingActive,
+                                    isRecording = trackingActive,
+                                    onToggleRecording = toggleRecording,
                                     onStartTracking = {
                                         if (hasActivityRecognition()) {
                                             startTracking()
@@ -227,11 +258,17 @@ class MainActivity : ComponentActivity() {
                             history = history,
                             endDate = LocalDate.now(),
                             modifier = modifier,
-                            dailyGoal = goals.dailySteps,
-                            weeklyGoal = goals.weeklySteps,
+                            dailyGoal = eff.dailySteps,
+                            weeklyGoal = eff.weeklySteps,
                         )
                         Destination.PROFILE -> key(activeId) { ProfileScreen(
                             initial = profileState,
+                            hasRecordedData = history.isNotEmpty(),
+                            onPickCsv = { uri ->
+                                scope.launch {
+                                    importCsv(uri, dao, activeId ?: DEFAULT_PROFILE_ID, today)
+                                }
+                            },
                             profiles = profiles,
                             activeId = activeId,
                             onSelectProfile = { id ->
@@ -336,6 +373,28 @@ class MainActivity : ComponentActivity() {
         return describeCountingStatus(status)
     }
 
+    /**
+     * Reads a CSV picked by the user, merges it with the stored history and saves the imported
+     * rows for [profileId]. Unreadable or invalid files are ignored, so the app never crashes.
+     */
+    private suspend fun importCsv(uri: Uri, dao: StepDayDao, profileId: String, today: String) {
+        try {
+            withContext(Dispatchers.IO) {
+                val text = contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    ?: return@withContext
+                val parsed = parseDailyCsv(text)
+                if (parsed.rows.isEmpty()) return@withContext
+                val existing = dao.getRange(profileId, "0000-01-01", today).toCsvRows()
+                val importedDates = parsed.rows.map { it.dateIso }.toSet()
+                mergeImported(existing, parsed.rows)
+                    .filter { it.dateIso in importedDates }
+                    .forEach { dao.upsert(it.toStepDayEntity(profileId)) }
+            }
+        } catch (e: Exception) {
+            Log.w("StepwiseImport", "CSV import failed", e)
+        }
+    }
+
     private fun hasActivityRecognition(): Boolean =
         Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
             ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) ==
@@ -346,7 +405,22 @@ class MainActivity : ComponentActivity() {
  * Today's metrics: the stored row when it exists (the step service keeps it up to date),
  * otherwise a zero-step estimate from the profile. Null when there is no usable profile.
  */
-private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?): DayMetrics? {
+private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?, liveSteps: Int?): DayMetrics? {
+    // While counting, the live count wins: recomputed from the profile, or steps only without one.
+    if (liveSteps != null) {
+        return if (profile != null) {
+            computeDay(profile, liveSteps)
+        } else {
+            DayMetrics(
+                steps = liveSteps,
+                distanceM = 0.0,
+                activeKcal = 0.0,
+                bmrKcal = 0.0,
+                rmrKcal = 0.0,
+                totalKcal = 0.0,
+            )
+        }
+    }
     // A stored row always wins for steps. Without a profile its distance and calories are 0.
     if (row != null && (row.totalKcal > 0.0 || profile == null)) {
         return DayMetrics(
@@ -360,6 +434,18 @@ private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?): DayMetrics?
     }
     return profile?.let { computeDay(it, row?.steps ?: 0) }
 }
+
+/** Maps an imported CSV row to a stored day for [profileId]. */
+private fun CsvDailyRow.toStepDayEntity(profileId: String): StepDayEntity = StepDayEntity(
+    dateIso = dateIso,
+    steps = steps,
+    distanceM = distanceM,
+    activeKcal = activeKcal,
+    bmrKcal = bmrKcal,
+    rmrKcal = rmrKcal,
+    totalKcal = totalKcal,
+    profileId = profileId,
+)
 
 /** Converts the stored profile to the domain type; null if the stored values are not usable. */
 private fun ProfileState.toDomainProfile(): Profile? {
