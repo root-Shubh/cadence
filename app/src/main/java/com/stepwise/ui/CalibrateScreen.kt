@@ -241,6 +241,10 @@ fun CalibrateScreen(
             }
         }
 
+        Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+            PermissionsPanel()
+        }
+
         if (permissionDenied) {
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {

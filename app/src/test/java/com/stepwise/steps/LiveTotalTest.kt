@@ -6,18 +6,39 @@ import org.junit.Test
 class LiveTotalTest {
 
     @Test
-    fun counterAheadWins() {
-        assertEquals(1200, liveTotal(counterTotal = 1200, accelTotal = 1100))
+    fun leadIsCappedAtTen() {
+        assertEquals(1210, displayTotal(counterTotal = 1200, accelSteps = 25))
     }
 
     @Test
-    fun accelAheadWins() {
-        assertEquals(1300, liveTotal(counterTotal = 1200, accelTotal = 1300))
+    fun leadIsTheUnmatchedAccelSteps() {
+        assertEquals(1205, displayTotal(counterTotal = 1200, accelSteps = 5))
     }
 
     @Test
-    fun equalSourcesGiveTheSameValue() {
-        assertEquals(500, liveTotal(counterTotal = 500, accelTotal = 500))
+    fun leadIsZeroWhenNoAccelStepsAreUnmatched() {
+        assertEquals(1200, displayTotal(counterTotal = 1200, accelSteps = 0))
+    }
+
+    @Test
+    fun negativeAccelStepsGiveNoLead() {
+        assertEquals(1200, displayTotal(counterTotal = 1200, accelSteps = -4))
+    }
+
+    @Test
+    fun shakeBurstOfFiftyWithNoCounterMovementShowsOnlyTenExtra() {
+        // The accelerometer saw 50 steps; the counter has not moved since 1200.
+        assertEquals(1210, displayTotal(counterTotal = 1200, accelSteps = 50))
+    }
+
+    @Test
+    fun customCapIsRespected() {
+        assertEquals(1203, displayTotal(counterTotal = 1200, accelSteps = 50, cap = 3))
+    }
+
+    @Test
+    fun totalIsClampedToIntMax() {
+        assertEquals(Int.MAX_VALUE, displayTotal(counterTotal = Int.MAX_VALUE, accelSteps = 5))
     }
 
     @Test

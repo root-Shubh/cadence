@@ -122,8 +122,17 @@ class StepCounterService : Service(), SensorEventListener {
     /** Steps from the hardware counter since the start of today. */
     private var counterSteps = 0L
 
-    /** Steps from the accelerometer since the start of today. */
-    private var accelSteps = 0L
+    /**
+     * Accelerometer steps since the hardware counter last reported. These are the provisional
+     * lead shown above the counter total (see [displayTotal]). Reset by every counter event.
+     */
+    private var accelUnmatched = 0L
+
+    /**
+     * True when the hardware step counter is the step source (plan COUNT). False on devices with
+     * no step counter, where the accelerometer is the only source and its steps count directly.
+     */
+    private var counterActive = false
 
     /** Newest hardware reading. Deltas are taken against it. */
     private var sensorRaw: Long? = null
@@ -263,6 +272,8 @@ class StepCounterService : Service(), SensorEventListener {
             rollDayLocked(now)
             counterSteps += StepDelta.nextDelta(sensorRaw, raw)
             sensorRaw = raw
+            // The counter has reported, so the accelerometer lead is matched up to here.
+            accelUnmatched = 0L
             liveLocked()
         }
         LiveSteps.reset(live)
@@ -334,7 +345,8 @@ class StepCounterService : Service(), SensorEventListener {
                     storedBase = total.toLong()
                     excessBase = readExcessFor(today).coerceIn(0L, storedBase)
                     counterSteps = 0L
-                    accelSteps = 0L
+                    accelUnmatched = 0L
+                    counterActive = plan == ServicePlan.COUNT
                     sensorRaw = readStoredRaw()
                     liveLocked()
                 }
@@ -401,7 +413,12 @@ class StepCounterService : Service(), SensorEventListener {
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
         val live = synchronized(countLock) {
             rollDayLocked(now)
-            accelSteps++
+            if (counterActive) {
+                accelUnmatched++
+            } else {
+                // No hardware counter: the accelerometer is the step source.
+                counterSteps++
+            }
             liveLocked()
         }
         LiveSteps.reset(live)
@@ -416,39 +433,37 @@ class StepCounterService : Service(), SensorEventListener {
         storedBase = 0L
         excessBase = 0L
         counterSteps = 0L
-        accelSteps = 0L
+        accelUnmatched = 0L
     }
 
     /**
-     * Today's live total: the larger of the counter based total and the accelerometer based
-     * total. Call under [countLock].
+     * Today's displayed total: the counter based total plus the capped accelerometer lead.
+     * Call under [countLock].
      */
-    private fun liveLocked(): Int = liveTotal(counterTotalLocked(), accelTotalLocked())
+    private fun liveLocked(): Int =
+        displayTotal(counterTotalLocked(), accelUnmatched.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
 
     /** Counter based total: the stored base, less its excess, plus hardware steps. */
     private fun counterTotalLocked(): Int = clampToInt(storedBase - excessBase + counterSteps)
 
-    /** Accelerometer based total: the stored total at start plus accelerometer steps. */
-    private fun accelTotalLocked(): Int = clampToInt(storedBase + accelSteps)
-
     private fun clampToInt(value: Long): Int = value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
 
     /** The counts to store for the current day, read under [countLock]. */
-    private class Snapshot(val day: String, val counterTotal: Int, val accelTotal: Int, val raw: Long?)
+    private class Snapshot(val day: String, val counterTotal: Int, val raw: Long?)
 
     private fun snapshotLocked(): Snapshot? {
         val day = liveDay ?: return null
-        return Snapshot(day, counterTotalLocked(), accelTotalLocked(), sensorRaw)
+        return Snapshot(day, counterTotalLocked(), sensorRaw)
     }
 
     /**
-     * Stores today's total, max(counter total, accelerometer total), never lower than the stored
-     * value. Skips the write when nothing changed since the last successful write. The raw
-     * prefs are written only after the database write succeeds. Runs only on the consumer.
+     * Stores today's counter based total, never lower than the stored value. The accelerometer
+     * lead is not stored. Skips the write when nothing changed since the last successful write.
+     * The raw prefs are written only after the database write succeeds. Runs only on the consumer.
      */
     private suspend fun flush(nowMillis: Long) {
         val snap = synchronized(countLock) { snapshotLocked() } ?: return
-        val candidate = liveTotal(snap.counterTotal, snap.accelTotal)
+        val candidate = snap.counterTotal
         if (snap.day == flushedDay && candidate == flushedTotal && snap.raw == flushedRaw) return
         try {
             val state: ProfileState? = ProfileStore(applicationContext).load()
@@ -636,7 +651,7 @@ class StepCounterService : Service(), SensorEventListener {
             storedBase = newTotal.toLong()
             excessBase = 0L
             counterSteps = 0L
-            accelSteps = 0L
+            accelUnmatched = 0L
         }
         appendVehicleLog(nowMillis, newTotal)
         mainHandler.post { if (!destroyed) LiveSteps.reset(newTotal) }
