@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Full-bleed brand tile. Adaptive icons mask this to a circle or squircle, so it is solid edge to edge. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:fillColor="@color/brand_primary"
+        android:pathData="M0,0H512V512H0Z" />
+</vector>

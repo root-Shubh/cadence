@@ -75,6 +75,8 @@ private const val HISTORY_DAYS = 60L
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Leave the splash theme for the normal app theme once the Activity is up.
+        setTheme(R.style.Theme_Stepwise)
         val profileStore = ProfileStore(applicationContext)
         val database = StepDatabase.getInstance(applicationContext)
         val dao = database.stepDayDao()
