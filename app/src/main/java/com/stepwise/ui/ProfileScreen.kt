@@ -1,5 +1,6 @@
 package com.stepwise.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,6 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -19,10 +21,12 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -73,11 +77,11 @@ fun ProfileScreen(
     onDeleteAllData: () -> Unit = {},
     onExportCsv: () -> Unit = {},
 ) {
-    var height by remember { mutableStateOf(initial?.heightCm?.toString() ?: "") }
-    var weight by remember { mutableStateOf(initial?.weightKg?.toString() ?: "") }
+    var height by remember { mutableStateOf(formatMeasure(initial?.heightCm)) }
+    var weight by remember { mutableStateOf(formatMeasure(initial?.weightKg)) }
     var age by remember { mutableStateOf(initial?.age?.toString() ?: "") }
     var sex by remember { mutableStateOf(initial?.sex ?: "") }
-    var stride by remember { mutableStateOf(initial?.strideOverrideCm?.toString() ?: "") }
+    var stride by remember { mutableStateOf(formatMeasure(initial?.strideOverrideCm)) }
     var errors by remember { mutableStateOf<List<String>>(emptyList()) }
     var confirmDeleteProfile by remember { mutableStateOf(false) }
     var confirmDeleteData by remember { mutableStateOf(false) }
@@ -101,6 +105,7 @@ fun ProfileScreen(
                 value = height,
                 onValueChange = { height = it },
                 label = { Text("Height (cm)") },
+                supportingText = { Text("cm") },
                 keyboardOptions = DECIMAL_KEYBOARD,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -109,6 +114,7 @@ fun ProfileScreen(
                 value = weight,
                 onValueChange = { weight = it },
                 label = { Text("Weight (kg)") },
+                supportingText = { Text("kg") },
                 keyboardOptions = DECIMAL_KEYBOARD,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -117,6 +123,7 @@ fun ProfileScreen(
                 value = age,
                 onValueChange = { age = it },
                 label = { Text("Age (years)") },
+                supportingText = { Text("years") },
                 keyboardOptions = INTEGER_KEYBOARD,
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -129,14 +136,20 @@ fun ProfileScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .fillMaxWidth()
-                            .height(48.dp)
+                            .heightIn(min = 48.dp)
                             .selectable(
                                 selected = sex == value,
                                 onClick = { sex = value },
                                 role = Role.RadioButton,
                             ),
                     ) {
-                        RadioButton(selected = sex == value, onClick = null)
+                        RadioButton(
+                            selected = sex == value,
+                            onClick = null,
+                            colors = RadioButtonDefaults.colors(
+                                selectedColor = MaterialTheme.colorScheme.primary,
+                            ),
+                        )
                         Spacer(Modifier.width(8.dp))
                         Text(label)
                     }
@@ -190,7 +203,7 @@ fun ProfileScreen(
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
             ) {
                 Text("Save profile")
             }
@@ -202,23 +215,40 @@ fun ProfileScreen(
                         selected = theme == choice,
                         onClick = { onThemeChange(choice) },
                         label = { Text(label) },
+                        colors = FilterChipDefaults.filterChipColors(
+                            selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                            selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer,
+                        ),
+                        modifier = Modifier.heightIn(min = 48.dp),
                     )
                 }
             }
 
             Text("Your data", style = MaterialTheme.typography.titleSmall)
-            OutlinedButton(onClick = onExportCsv, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onExportCsv,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+            ) {
                 Text("Export CSV")
             }
+            Spacer(Modifier.height(16.dp))
             OutlinedButton(
                 onClick = { confirmDeleteProfile = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
             ) {
                 Text("Delete profile")
             }
             OutlinedButton(
                 onClick = { confirmDeleteData = true },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                colors = ButtonDefaults.outlinedButtonColors(
+                    contentColor = MaterialTheme.colorScheme.error,
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.error),
             ) {
                 Text("Delete all recorded data")
             }
