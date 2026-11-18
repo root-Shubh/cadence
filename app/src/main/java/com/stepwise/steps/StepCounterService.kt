@@ -16,6 +16,7 @@ import android.hardware.SensorEventListener
 import android.hardware.SensorManager
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -67,10 +68,19 @@ class StepCounterService : Service(), SensorEventListener {
     private var accelSource: AccelStepSource? = null
     private var sensorFree = false
     private var lastSteps = 0
+    private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onCreate() {
         super.onCreate()
         createChannel()
+        // The step counter only reports while the processor is awake. The lock has a timeout
+        // so it cannot stay held forever; it is renewed on each sensor event.
+        wakeLock = getSystemService(PowerManager::class.java)
+            ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
+            ?.apply {
+                setReferenceCounted(false)
+                acquire(WAKE_LOCK_TIMEOUT_MS)
+            }
         scope.launch {
             for (event in events) {
                 try {
@@ -134,7 +144,23 @@ class StepCounterService : Service(), SensorEventListener {
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return
-        events.trySend(StepEvent.Cumulative(event.values[0].toLong()))
+        val raw = event.values[0].toLong()
+        wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+        // Diagnostics are written before queueing, so events are visible even if the
+        // later database write fails.
+        recordEventDiagnostics(System.currentTimeMillis(), raw)
+        Log.d(TAG, "Step counter event raw=$raw")
+        events.trySend(StepEvent.Cumulative(raw))
+    }
+
+    private fun recordEventDiagnostics(nowMillis: Long, raw: Long) {
+        val prefs = prefs()
+        val received = prefs.getLong(KEY_EVENTS_RECEIVED, 0L) + 1L
+        prefs.edit()
+            .putLong(KEY_LAST_EVENT_MILLIS, nowMillis)
+            .putLong(KEY_LAST_EVENT_RAW, raw)
+            .putLong(KEY_EVENTS_RECEIVED, received)
+            .apply()
     }
 
     override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {
@@ -150,6 +176,8 @@ class StepCounterService : Service(), SensorEventListener {
         accelSource = null
         events.close()
         scope.cancel()
+        wakeLock?.let { if (it.isHeld) it.release() }
+        wakeLock = null
         super.onDestroy()
     }
 
@@ -162,10 +190,12 @@ class StepCounterService : Service(), SensorEventListener {
             return
         }
         sensorManager = manager
+        // maxReportLatencyUs = 0: deliver each event as it happens, without batching.
         listenerRegistered = manager.registerListener(
             this,
             sensor,
             SensorManager.SENSOR_DELAY_NORMAL,
+            0,
         )
     }
 
@@ -298,6 +328,11 @@ class StepCounterService : Service(), SensorEventListener {
         const val PREFS_NAME = "stepwise_tracker"
         const val KEY_LAST_RAW = "last_raw"
         const val KEY_SENSOR_MISSING = "sensor_missing"
+        const val KEY_LAST_EVENT_MILLIS = "last_event_millis"
+        const val KEY_LAST_EVENT_RAW = "last_event_raw"
+        const val KEY_EVENTS_RECEIVED = "events_received"
+        private const val WAKE_LOCK_TAG = "stepwise:steps"
+        private const val WAKE_LOCK_TIMEOUT_MS = 10 * 60 * 1000L
         private const val CHANNEL_ID = "steps"
         private const val NOTIFICATION_ID = 1301
 
