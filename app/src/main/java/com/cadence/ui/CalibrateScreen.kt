@@ -327,10 +327,6 @@ fun CalibrateScreen(
             }
         }
 
-        Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
-            PermissionsPanel()
-        }
-
         if (permissionDenied) {
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -464,6 +460,10 @@ fun CalibrateScreen(
             Reveal(index = 6, modifier = Modifier.fillMaxWidth()) {
                 Text(it, style = MaterialTheme.typography.titleMedium)
             }
+        }
+
+        Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
+            PermissionsPanel()
         }
 
         Reveal(index = 7, modifier = Modifier.fillMaxWidth()) {
