@@ -9,27 +9,29 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Alignment
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.stepwise.domain.DayPoint
 import java.time.LocalDate
-import java.time.format.TextStyle
-import java.util.Locale
+import kotlin.math.roundToLong
 
 private val CHART_HEIGHT = 160.dp
 private val BASELINE_THICKNESS = 1.dp
 private const val BAR_FILL = 0.7f
+private const val MONTH_AXIS_STEP = 5
 
 /**
  * Bar chart of steps per day. Missing days are drawn as a thin baseline segment with no bar.
- * The Week view labels bars with the weekday; any other window uses day-of-month.
+ * The Week view labels every bar with its weekday ("Today" for the current date, in bold
+ * primary). Any other window labels every 5th day plus the last day of the window.
  * [averageSteps] is only used for the accessibility description.
  */
 @Composable
@@ -43,10 +45,14 @@ fun TrendChart(
     val baselineColor = MaterialTheme.colorScheme.outlineVariant
     val missingColor = MaterialTheme.colorScheme.outlineVariant
     val fractions = barFractions(series.map { it.steps })
+    val todayIso = remember { LocalDate.now().toString() }
+    val labelIndices = remember(series.size, weekdayLabels) {
+        if (weekdayLabels) emptySet() else axisLabelIndices(series.size, MONTH_AXIS_STEP).toSet()
+    }
     val description = buildString {
         append("Bar chart of steps per day over ${series.size} days. ")
         if (averageSteps != null) {
-            append("Average ${averageSteps.toInt()} steps per day.")
+            append("Average ${formatCount(averageSteps.roundToLong())} steps per day.")
         } else {
             append("No average available.")
         }
@@ -95,11 +101,22 @@ fun TrendChart(
         }
 
         Row(modifier = Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            series.forEach { point ->
+            series.forEachIndexed { index, point ->
+                val isToday = weekdayLabels && point.dateIso == todayIso
+                val text = when {
+                    weekdayLabels -> weekdayLabel(point.dateIso, todayIso)
+                    index in labelIndices -> LocalDate.parse(point.dateIso).dayOfMonth.toString()
+                    else -> ""
+                }
                 Text(
-                    text = axisLabel(point.dateIso, weekdayLabels),
+                    text = text,
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (isToday) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                    fontWeight = if (isToday) FontWeight.Bold else null,
                     textAlign = TextAlign.Center,
                     maxLines = 1,
                     fontSize = if (weekdayLabels) 12.sp else 9.sp,
@@ -107,14 +124,5 @@ fun TrendChart(
                 )
             }
         }
-    }
-}
-
-private fun axisLabel(dateIso: String, weekdayLabels: Boolean): String {
-    val date = LocalDate.parse(dateIso)
-    return if (weekdayLabels) {
-        date.dayOfWeek.getDisplayName(TextStyle.SHORT, Locale.getDefault()).take(2)
-    } else {
-        date.dayOfMonth.toString()
     }
 }

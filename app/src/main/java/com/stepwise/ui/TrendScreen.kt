@@ -27,7 +27,7 @@ import com.stepwise.domain.DailyRecord
 import com.stepwise.domain.TrendSummary
 import com.stepwise.domain.computeTrend
 import java.time.LocalDate
-import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 private const val WEEK_DAYS = 7
 private const val MONTH_DAYS = 30
@@ -100,31 +100,30 @@ private fun TrendContent(trend: TrendSummary, weekdayLabels: Boolean) {
         ) {
             StatCard(
                 label = "Avg steps / day",
-                value = trend.avgSteps?.roundToInt()?.toString() ?: "-",
+                value = trend.avgSteps?.let { formatCount(it.roundToLong()) } ?: "-",
                 modifier = Modifier.weight(1f),
             )
             StatCard(
                 label = "Avg kcal / day",
-                value = trend.avgKcal?.roundToInt()?.toString() ?: "-",
+                value = trend.avgKcal?.let { formatKcal(it) } ?: "-",
                 modifier = Modifier.weight(1f),
             )
         }
         StatCard(
             label = "Total steps",
-            value = "%,d".format(trend.totalSteps),
+            value = formatCount(trend.totalSteps),
             modifier = Modifier.fillMaxWidth(),
         )
         StatCard(
             label = "Change vs previous ${trend.windowDays} days",
-            value = trend.percentChangeSteps?.let { "%+.1f%%".format(it) }
-                ?: "no earlier data",
+            value = trend.percentChangeSteps?.let { formatPercent(it) },
             modifier = Modifier.fillMaxWidth(),
         )
     }
 }
 
 @Composable
-private fun StatCard(label: String, value: String, modifier: Modifier = Modifier) {
+private fun StatCard(label: String, value: String?, modifier: Modifier = Modifier) {
     Card(modifier = modifier) {
         Column(modifier = Modifier.padding(12.dp)) {
             Text(
@@ -132,11 +131,19 @@ private fun StatCard(label: String, value: String, modifier: Modifier = Modifier
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            Text(
-                text = value,
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurface,
-            )
+            if (value != null) {
+                Text(
+                    text = value,
+                    style = MaterialTheme.typography.titleLarge,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+            } else {
+                Text(
+                    text = "no earlier data",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
