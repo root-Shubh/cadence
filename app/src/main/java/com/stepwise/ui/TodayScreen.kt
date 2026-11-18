@@ -1,7 +1,8 @@
 package com.stepwise.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,27 +10,38 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Route
-import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -37,6 +49,13 @@ import com.stepwise.domain.DailyRecord
 import com.stepwise.domain.DayMetrics
 import java.time.LocalDate
 import java.util.Locale
+
+/** Period shown by the Today progress card. */
+enum class ProgressPeriod(val label: String) {
+    DAY("Day"),
+    WEEK("Week"),
+    MONTH("Month"),
+}
 
 @Composable
 fun TodayScreen(
@@ -48,10 +67,13 @@ fun TodayScreen(
     sensorMissing: Boolean = false,
     countingStatusText: String? = null,
     dailyGoal: Int? = null,
+    weeklyGoal: Int? = null,
+    monthlyGoal: Int? = null,
     history: List<DailyRecord> = emptyList(),
     endDate: LocalDate = LocalDate.now(),
+    onToggleRecording: () -> Unit = {},
+    isRecording: Boolean = trackingActive,
 ) {
-    val startSource = remember { MutableInteractionSource() }
     val steps = day?.steps
     val caloriesKnown = day != null && day.totalKcal > 0.0
 
@@ -61,7 +83,6 @@ fun TodayScreen(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Everything above the button scrolls; the button stays pinned at the bottom.
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -79,6 +100,17 @@ fun TodayScreen(
             }
 
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                ProgressCard(
+                    steps = steps ?: 0,
+                    dailyGoal = dailyGoal,
+                    weeklyGoal = weeklyGoal,
+                    monthlyGoal = monthlyGoal,
+                    history = history,
+                    endDate = endDate,
+                )
+            }
+
+            Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
                 StatChipRow(
                     goalValue = goalPercent(steps ?: 0, dailyGoal)?.let { "$it%" } ?: "Set goal",
                     averageValue = sevenDayAverage(history, endDate)
@@ -87,9 +119,14 @@ fun TodayScreen(
                 )
             }
 
-            Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
+            Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroStepCard(steps = steps, dailyGoal = dailyGoal)
+                    HeroStepCard(
+                        steps = steps,
+                        dailyGoal = dailyGoal,
+                        isRecording = isRecording,
+                        onToggleRecording = onToggleRecording,
+                    )
                     countingStatusText?.let {
                         Text(
                             text = it,
@@ -101,7 +138,7 @@ fun TodayScreen(
                 }
             }
 
-            Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
+            Reveal(index = 4, modifier = Modifier.fillMaxWidth()) {
                 Card(modifier = Modifier.fillMaxWidth()) {
                     Row(
                         modifier = Modifier.padding(16.dp),
@@ -126,7 +163,7 @@ fun TodayScreen(
             }
 
             if (profileMissing && !caloriesKnown) {
-                Reveal(index = 4, modifier = Modifier.fillMaxWidth()) {
+                Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -148,7 +185,7 @@ fun TodayScreen(
                     }
                 }
             } else if (day != null && caloriesKnown) {
-                Reveal(index = 4, modifier = Modifier.fillMaxWidth()) {
+                Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
                     CalorieGrid(
                         totalKcal = Math.round(day.totalKcal).toInt(),
                         activeKcal = Math.round(day.activeKcal).toInt(),
@@ -158,37 +195,70 @@ fun TodayScreen(
                 }
             }
         }
+    }
+}
 
-        if (trackingActive) {
-            Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(56.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(
-                        text = "Counting",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.primary,
-                        textAlign = TextAlign.Center,
+/** Day, Week or Month progress: a segmented choice and a bar with "N of M steps" or "Set a goal". */
+@Composable
+private fun ProgressCard(
+    steps: Int,
+    dailyGoal: Int?,
+    weeklyGoal: Int?,
+    monthlyGoal: Int?,
+    history: List<DailyRecord>,
+    endDate: LocalDate,
+) {
+    var period by remember { mutableStateOf(ProgressPeriod.DAY) }
+
+    val (total, goal) = when (period) {
+        ProgressPeriod.DAY -> steps to dailyGoal
+        ProgressPeriod.WEEK -> windowStepTotal(history, endDate, WEEK_WINDOW_DAYS) to weeklyGoal
+        ProgressPeriod.MONTH -> monthStepTotal(history, endDate) to monthlyGoal
+    }
+    val validGoal = goal?.takeIf { it > 0 }
+    val summary = if (validGoal != null) {
+        progressLabel(total, validGoal)
+    } else {
+        "Set a goal"
+    }
+
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                ProgressPeriod.entries.forEach { option ->
+                    FilterChip(
+                        selected = option == period,
+                        onClick = { period = option },
+                        label = { Text(option.label) },
+                        modifier = Modifier.heightIn(min = 48.dp),
                     )
                 }
             }
-        } else {
-            Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
-                Button(
-                    onClick = onStartTracking,
-                    interactionSource = startSource,
+            if (validGoal != null) {
+                LinearProgressIndicator(
+                    progress = { progressFraction(total, validGoal) },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(56.dp)
-                        .pressScale(startSource),
-                    shape = MaterialTheme.shapes.extraLarge,
-                ) {
-                    Text("Start counting")
-                }
+                        .semantics(mergeDescendants = true) {
+                            contentDescription = "${period.label} progress: $summary"
+                        },
+                    color = MaterialTheme.colorScheme.primary,
+                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                )
             }
+            Text(
+                text = summary,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }
@@ -235,9 +305,17 @@ private fun StatChip(value: String, label: String, modifier: Modifier = Modifier
     }
 }
 
-/** Step count on a soft vertical gradient, with a goal progress ring on the right. */
+/**
+ * Step count on a soft vertical gradient, with a goal progress ring on the right.
+ * The record chip sits under the step count.
+ */
 @Composable
-private fun HeroStepCard(steps: Int?, dailyGoal: Int?) {
+private fun HeroStepCard(
+    steps: Int?,
+    dailyGoal: Int?,
+    isRecording: Boolean,
+    onToggleRecording: () -> Unit,
+) {
     val gradient = Brush.verticalGradient(
         listOf(
             MaterialTheme.colorScheme.primaryContainer,
@@ -294,6 +372,12 @@ private fun HeroStepCard(steps: Int?, dailyGoal: Int?) {
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                     )
                 }
+
+                RecordChip(
+                    isRecording = isRecording,
+                    onToggle = onToggleRecording,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
             Box(
                 modifier = Modifier
@@ -310,6 +394,67 @@ private fun HeroStepCard(steps: Int?, dailyGoal: Int?) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Small record control: a 40 dp round chip with a record icon plus its label, inside a 48 dp
+ * touch target. Idle shows an outlined chip and "Record"; counting shows a red dot and "Recording".
+ * Tapping it toggles counting.
+ */
+@Composable
+private fun RecordChip(isRecording: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) {
+    val label = if (isRecording) "Recording" else "Record"
+    val actionText = if (isRecording) "Stop recording" else "Start recording"
+    Row(
+        modifier = modifier
+            .heightIn(min = 48.dp)
+            .clickable(
+                role = Role.Button,
+                onClickLabel = actionText,
+                onClick = onToggle,
+            )
+            .semantics(mergeDescendants = true) {
+                contentDescription = actionText
+                stateDescription = if (isRecording) "Recording" else "Not recording"
+                role = Role.Button
+            }
+            .padding(end = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (isRecording) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .background(MaterialTheme.colorScheme.surface, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.FiberManualRecord,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error,
+                )
+            }
+        } else {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .border(1.dp, MaterialTheme.colorScheme.outline, CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.FiberManualRecord,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+        )
     }
 }
 

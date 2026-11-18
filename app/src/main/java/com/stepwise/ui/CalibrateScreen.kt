@@ -3,8 +3,10 @@ package com.stepwise.ui
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
@@ -79,6 +81,11 @@ fun CalibrateScreen(
     var showGpsDialog by remember { mutableStateOf(false) }
     // Bumped on every ON_RESUME (for example, back from location settings) to re-check GPS.
     var resumeCount by remember { mutableIntStateOf(0) }
+    // True when GPS was switched off mid-walk: the walk is paused and resumes once GPS is back on.
+    var gpsPaused by remember { mutableStateOf(false) }
+    var pausedSteps by remember { mutableIntStateOf(0) }
+    // Bumped on every location provider change while a walk runs or is paused, and on resume.
+    var gpsEvents by remember { mutableIntStateOf(0) }
 
     val listener = remember {
         object : LocationListener {
@@ -144,10 +151,48 @@ fun CalibrateScreen(
         }
     }
 
+    // Listen for location on/off changes while a walk runs or is paused.
+    val watching = walking || gpsPaused
+    DisposableEffect(watching) {
+        if (!watching) return@DisposableEffect onDispose {}
+        val receiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                gpsEvents++
+            }
+        }
+        ContextCompat.registerReceiver(
+            context,
+            receiver,
+            IntentFilter(LocationManager.PROVIDERS_CHANGED_ACTION),
+            ContextCompat.RECEIVER_NOT_EXPORTED,
+        )
+        onDispose { context.unregisterReceiver(receiver) }
+    }
+
+    // Pauses the walk when GPS turns off and resumes it when GPS comes back.
+    LaunchedEffect(gpsEvents) {
+        if (gpsEvents == 0) return@LaunchedEffect
+        val enabled = isGpsEnabled(locationManager)
+        if (walking && !enabled) {
+            pausedSteps = currentSteps() - startSteps
+            liveSteps = pausedSteps
+            message = null
+            walking = false
+            gpsPaused = true
+        } else if (gpsPaused && enabled) {
+            gpsPaused = false
+            startSteps = currentSteps() - pausedSteps
+            walking = true
+        }
+    }
+
     // Re-check GPS when the user returns to this screen.
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) resumeCount++
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resumeCount++
+                gpsEvents++
+            }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
@@ -183,6 +228,32 @@ fun CalibrateScreen(
                         onClick = { startSettingsIntent(context, appSettingsIntent(context)) },
                     ) {
                         Text("Open app settings")
+                    }
+                }
+            }
+        }
+
+        if (gpsPaused) {
+            Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                Card(modifier = Modifier.fillMaxWidth()) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Text(
+                            "GPS is off. Turn location back on to keep measuring.",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        OutlinedButton(
+                            shape = MaterialTheme.shapes.extraLarge,
+                            onClick = {
+                                startSettingsIntent(context, Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                            },
+                            modifier = Modifier.heightIn(min = 48.dp),
+                        ) {
+                            Text("Turn on")
+                        }
                     }
                 }
             }
@@ -258,6 +329,7 @@ fun CalibrateScreen(
                     interactionSource = buttonSource,
                     onClick = {
                         message = null
+                        gpsPaused = false
                         if (hasLocationPermission(context)) {
                             permissionDenied = false
                             pendingStart = true

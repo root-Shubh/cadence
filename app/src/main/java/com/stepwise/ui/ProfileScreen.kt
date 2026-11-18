@@ -9,6 +9,9 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -113,6 +116,8 @@ fun ProfileScreen(
     onDeleteProfile: () -> Unit = {},
     onDeleteAllData: () -> Unit = {},
     onExportCsv: () -> Unit = {},
+    onImportCsv: (String) -> Unit = {},
+    onPickCsv: (Uri) -> Unit = {},
     profiles: List<ProfileState> = emptyList(),
     activeId: String? = null,
     onSelectProfile: (String) -> Unit = {},
@@ -140,6 +145,13 @@ fun ProfileScreen(
 
     val saveSource = remember { MutableInteractionSource() }
     val exportSource = remember { MutableInteractionSource() }
+    val importSource = remember { MutableInteractionSource() }
+    val importLauncher = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            onPickCsv(uri)
+            onImportCsv(uri.toString())
+        }
+    }
     val deleteProfileSource = remember { MutableInteractionSource() }
     val deleteDataSource = remember { MutableInteractionSource() }
 
@@ -389,6 +401,20 @@ fun ProfileScreen(
                         Text("Export CSV")
                     }
                     OutlinedButton(
+                        onClick = {
+                            importLauncher.launch(
+                                arrayOf("text/csv", "text/comma-separated-values", "text/plain"),
+                            )
+                        },
+                        interactionSource = importSource,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .pressScale(importSource),
+                    ) {
+                        Text("Import CSV")
+                    }
+                    OutlinedButton(
                         onClick = { confirmDeleteProfile = true },
                         interactionSource = deleteProfileSource,
                         modifier = Modifier
@@ -426,7 +452,12 @@ fun ProfileScreen(
         AlertDialog(
             onDismissRequest = { confirmDeleteProfile = false },
             title = { Text("Delete profile?") },
-            text = { Text("This removes your saved profile. Your step history is kept.") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("This removes your saved profile. Your step history is kept.")
+                    DeleteAdviceBlock(onExportCsv = onExportCsv)
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
@@ -453,7 +484,12 @@ fun ProfileScreen(
         AlertDialog(
             onDismissRequest = { confirmDeleteData = false },
             title = { Text("Delete all recorded data?") },
-            text = { Text("This removes all recorded step history. Your profile is kept.") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("This removes all recorded step history. Your profile is kept.")
+                    DeleteAdviceBlock(onExportCsv = onExportCsv)
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
@@ -474,6 +510,26 @@ fun ProfileScreen(
                 }
             },
         )
+    }
+}
+
+/** Advice shown inside delete confirmations, with a button that starts the CSV export first. */
+@Composable
+private fun DeleteAdviceBlock(onExportCsv: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Export your data as CSV first. Stepwise has no cloud storage, so deleting here cannot be undone.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        OutlinedButton(
+            onClick = onExportCsv,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 48.dp),
+        ) {
+            Text("Export CSV first")
+        }
     }
 }
 
