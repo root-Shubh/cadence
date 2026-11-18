@@ -41,7 +41,7 @@ fun TrendChart(
 ) {
     val barColor = MaterialTheme.colorScheme.primary
     val baselineColor = MaterialTheme.colorScheme.outlineVariant
-    val missingColor = MaterialTheme.colorScheme.outline
+    val missingColor = MaterialTheme.colorScheme.outlineVariant
     val fractions = barFractions(series.map { it.steps })
     val description = buildString {
         append("Bar chart of steps per day over ${series.size} days. ")

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
+import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -126,14 +127,26 @@ fun CalibrateScreen(
             )
         }
 
-        Text(
-            "Distance: ${"%.0f".format(distanceM)} m",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text("Steps during walk: $liveSteps", style = MaterialTheme.typography.headlineSmall)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Distance: ${"%.0f".format(distanceM)} m",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.tertiary,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Text(
+                "Steps during walk: $liveSteps",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(16.dp),
+            )
+        }
 
         if (walking) {
             OutlinedButton(
+                shape = MaterialTheme.shapes.extraLarge,
                 onClick = {
                     walking = false
                     val steps = currentSteps() - startSteps
@@ -151,6 +164,7 @@ fun CalibrateScreen(
             }
         } else {
             Button(
+                shape = MaterialTheme.shapes.extraLarge,
                 onClick = {
                     message = null
                     if (hasLocationPermission(context)) {
