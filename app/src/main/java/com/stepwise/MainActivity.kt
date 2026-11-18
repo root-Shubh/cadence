@@ -21,6 +21,7 @@ import com.stepwise.data.ProfileState
 import com.stepwise.data.ProfileStore
 import com.stepwise.data.StepDatabase
 import com.stepwise.data.StepDayEntity
+import com.stepwise.domain.DailyRecord
 import com.stepwise.domain.DayMetrics
 import com.stepwise.domain.Profile
 import com.stepwise.domain.Sex
@@ -36,6 +37,8 @@ import com.stepwise.ui.StepwiseTheme
 import com.stepwise.ui.TodayScreen
 import com.stepwise.ui.TrendScreen
 import java.time.LocalDate
+
+private const val HISTORY_DAYS = 60L
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -67,6 +70,14 @@ class MainActivity : ComponentActivity() {
                 }
                 val todaySteps = todayRow?.steps ?: 0
 
+                // Last 60 days of stored rows: covers the 30-day window and the one before it.
+                val history by produceState<List<DailyRecord>>(initialValue = emptyList(), today) {
+                    val from = LocalDate.now().minusDays(HISTORY_DAYS).toString()
+                    dao.getRangeFlow(from, today).collect { rows ->
+                        value = rows.map { DailyRecord(it.dateIso, it.steps, it.totalKcal) }
+                    }
+                }
+
                 // Requests the activity-recognition permission, then starts the service.
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
@@ -95,7 +106,7 @@ class MainActivity : ComponentActivity() {
                             )
                         }
                         Destination.TREND -> TrendScreen(
-                            history = emptyList(),
+                            history = history,
                             endDate = LocalDate.now(),
                             modifier = modifier,
                         )
