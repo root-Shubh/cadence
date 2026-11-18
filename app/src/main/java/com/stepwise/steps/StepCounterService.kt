@@ -4,6 +4,7 @@ import android.Manifest
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
@@ -16,6 +17,9 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.location.Location
+import android.location.LocationListener
+import android.location.LocationManager
 import android.os.Build
 import android.os.Handler
 import android.os.IBinder
@@ -30,6 +34,7 @@ import com.stepwise.data.ProfileState
 import com.stepwise.data.ProfileStore
 import com.stepwise.data.StepDatabase
 import com.stepwise.data.StepDayEntity
+import com.stepwise.MainActivity
 import com.stepwise.domain.Profile
 import com.stepwise.domain.Sex
 import com.stepwise.domain.computeDay
@@ -46,8 +51,10 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.time.LocalDate
 import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicLong
+import java.util.concurrent.atomic.AtomicReference
 
 /**
  * Foreground service that counts steps from the hardware TYPE_STEP_COUNTER sensor, or from the
@@ -87,6 +94,18 @@ class StepCounterService : Service(), SensorEventListener {
     private var consumerJob: Job? = null
     private var tickerJob: Job? = null
     private var notifyJob: Job? = null
+
+    // Vehicle check. Touched only on the main thread.
+    private val vehicleDetector = VehicleDetector()
+    private var locationManager: LocationManager? = null
+    private var locationListener: LocationListener? = null
+    private var lastPlan: ServicePlan? = null
+
+    /** True from a vehicle start until counting resumes: the step source is off. */
+    private var vehiclePaused = false
+
+    /** Start time of a vehicle detected on the main thread, handled by the consumer. */
+    private val pendingVehicleStart = AtomicReference<Long?>(null)
 
     // Sensor path state. Only touched on the main thread.
     /** Last raw reading seen by the sensor path, for the live count. */
@@ -129,6 +148,8 @@ class StepCounterService : Service(), SensorEventListener {
                     val force = forceFlush
                     forceFlush = false
                     if (isDirty() && (force || shouldWriteNow(lastWriteMillis, now))) flush(now)
+                    // Runs after the flush, so the rollback sees every step counted before the stop.
+                    pendingVehicleStart.getAndSet(null)?.let { rollBackSince(it, now) }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -193,8 +214,14 @@ class StepCounterService : Service(), SensorEventListener {
             return START_NOT_STICKY
         }
 
+        lastPlan = plan
         if (!started) {
             started = true
+            beginCounting(plan)
+        } else if (vehiclePaused) {
+            // The user pressed record again after a vehicle stop. Detection starts fresh.
+            vehiclePaused = false
+            vehicleDetector.reset()
             beginCounting(plan)
         }
         return START_STICKY
@@ -252,6 +279,7 @@ class StepCounterService : Service(), SensorEventListener {
         }
         accelSource?.stop()
         accelSource = null
+        stopLocation()
         LiveSteps.setTracking(false)
         wakeups.close()
 
@@ -311,7 +339,159 @@ class StepCounterService : Service(), SensorEventListener {
         LiveSteps.setTracking(true)
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
         startNotificationUpdates()
+        startLocation()
     }
+
+    /**
+     * GPS listener for the vehicle check. Runs only while counting, and after a vehicle stop
+     * until the vehicle ends. Without fine location the check is off and counting is unchanged.
+     */
+    private fun startLocation() {
+        if (locationListener != null || destroyed) return
+        if (!hasFineLocation(this)) return
+        val manager = getSystemService(LocationManager::class.java) ?: return
+        val listener = object : LocationListener {
+            override fun onLocationChanged(location: Location) = onGpsFix(location)
+        }
+        try {
+            manager.requestLocationUpdates(
+                LocationManager.GPS_PROVIDER,
+                GPS_INTERVAL_MS,
+                0f,
+                listener,
+            )
+            locationManager = manager
+            locationListener = listener
+        } catch (e: SecurityException) {
+            Log.w(TAG, "No location permission for the vehicle check", e)
+        } catch (e: IllegalArgumentException) {
+            Log.w(TAG, "GPS provider not available for the vehicle check", e)
+        }
+    }
+
+    private fun stopLocation() {
+        val listener = locationListener ?: return
+        locationManager?.removeUpdates(listener)
+        locationListener = null
+        locationManager = null
+    }
+
+    /** Main thread. Only the speed is used; coordinates are never kept. */
+    private fun onGpsFix(location: Location) {
+        if (destroyed) return
+        if (!location.hasSpeed() || !location.hasAccuracy()) return
+        if (location.accuracy > GPS_MAX_ACCURACY_M) return
+        val kmh = location.speed.toDouble() * MPS_TO_KMH
+        when (val event = vehicleDetector.onSpeed(kmh, System.currentTimeMillis())) {
+            is VehicleStarted -> onVehicleStarted(event.startTimeMillis)
+            VehicleEnded -> onVehicleEnded()
+            null -> Unit
+        }
+    }
+
+    /**
+     * Main thread. Stops the step source and turns counting off, but keeps the service up so
+     * the GPS listener can see the vehicle end. The consumer then removes the ride's steps.
+     */
+    private fun onVehicleStarted(startMillis: Long) {
+        if (vehiclePaused || destroyed) return
+        vehiclePaused = true
+        if (listenerRegistered) {
+            sensorManager?.unregisterListener(this)
+            listenerRegistered = false
+        }
+        accelSource?.stop()
+        accelSource = null
+        notifyJob?.cancel()
+        notifyJob = null
+        LiveSteps.setTracking(false)
+        prefs().edit().putBoolean(KEY_COUNTING_ON, false).apply()
+        pendingVehicleStart.set(startMillis)
+        forceFlush = true
+        wakeups.trySend(Unit)
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) ==
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildPausedNotification())
+        }
+    }
+
+    /** Main thread. The vehicle has ended, so the GPS listener is no longer needed. */
+    private fun onVehicleEnded() {
+        if (!vehiclePaused) return
+        stopLocation()
+        stopSelf()
+    }
+
+    /**
+     * Consumer. Removes the steps counted since [startMillis] from today's total, then raises
+     * the vehicle alert. The dialog shows when the app is open; otherwise a notification is posted.
+     */
+    private suspend fun rollBackSince(startMillis: Long, nowMillis: Long) {
+        val dateIso = todayIso()
+        val state: ProfileState? = ProfileStore(applicationContext).load()
+        val profileId = state?.id ?: DEFAULT_PROFILE_ID
+        val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
+        val current = dao.getByDate(profileId, dateIso)?.steps ?: 0
+        val remove = stepsToRemove(loadVehicleLog(), startMillis, current)
+        val newTotal = current - remove
+        if (remove > 0) dao.upsert(toEntity(state, profileId, dateIso, newTotal))
+        appendVehicleLog(nowMillis, newTotal)
+        mainHandler.post { if (!destroyed) LiveSteps.reset(newTotal) }
+        VehicleAlert.raise()
+        if (!VehicleAlert.appVisible) postVehicleNotification()
+    }
+
+    private fun postVehicleNotification() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) !=
+            PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val open = PendingIntent.getActivity(
+            this,
+            0,
+            Intent(this, MainActivity::class.java),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentTitle(VEHICLE_ALERT_TITLE)
+            .setContentText(VEHICLE_ALERT_TEXT)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(VEHICLE_ALERT_TEXT))
+            .setPriority(NotificationCompat.PRIORITY_DEFAULT)
+            .setContentIntent(open)
+            .setAutoCancel(true)
+            .build()
+        NotificationManagerCompat.from(this).notify(VEHICLE_NOTIFICATION_ID, notification)
+    }
+
+    private fun buildPausedNotification(): Notification =
+        NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentTitle("Stepwise has paused counting")
+            .setContentText("Vehicle speed detected. Press record in the app to resume.")
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(true)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
+
+    private fun loadVehicleLog(): List<Pair<Long, Int>> =
+        decodeVehicleLog(vehiclePrefs().getString(KEY_VEHICLE_LOG, null))
+
+    /** Keeps the (time, total) log for today and the last two hours only. */
+    private fun appendVehicleLog(nowMillis: Long, total: Int) {
+        val zone = ZoneId.systemDefault()
+        val dayStart = LocalDate.now(zone).atStartOfDay(zone).toInstant().toEpochMilli()
+        val keepFrom = maxOf(nowMillis - VEHICLE_LOG_WINDOW_MS, dayStart)
+        val updated = appendToVehicleLog(loadVehicleLog(), nowMillis, total, keepFrom)
+        vehiclePrefs().edit().putString(KEY_VEHICLE_LOG, encodeVehicleLog(updated)).apply()
+    }
+
+    private fun vehiclePrefs(): SharedPreferences =
+        getSharedPreferences(VEHICLE_PREFS_NAME, Context.MODE_PRIVATE)
 
     /** Hardware path: one listener for the whole service lifetime. */
     private fun registerListener(): Boolean {
@@ -415,6 +595,7 @@ class StepCounterService : Service(), SensorEventListener {
             .coerceIn(0L, Int.MAX_VALUE.toLong())
             .toInt()
         dao.upsert(toEntity(state, profileId, dateIso, steps))
+        appendVehicleLog(System.currentTimeMillis(), steps)
     }
 
     private suspend fun todayStoredSteps(): Int {
@@ -558,6 +739,13 @@ class StepCounterService : Service(), SensorEventListener {
         private const val CHANNEL_ID = "steps"
         private const val NOTIFICATION_ID = 1301
         private const val NOTIFY_INTERVAL_MS = 1000L
+
+        /** GPS fixes used for the vehicle check: at most this inaccurate, in metres. */
+        private const val GPS_MAX_ACCURACY_M = 20f
+        private const val GPS_INTERVAL_MS = 1000L
+        private const val MPS_TO_KMH = 3.6
+        private const val VEHICLE_PREFS_NAME = "stepwise_vehicle"
+        private const val KEY_VEHICLE_LOG = "log"
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, StepCounterService::class.java))

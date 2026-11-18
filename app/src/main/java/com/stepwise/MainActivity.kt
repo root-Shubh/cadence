@@ -42,6 +42,12 @@ import com.stepwise.steps.LiveSteps
 import com.stepwise.steps.appNotificationSettingsIntent
 import com.stepwise.steps.notificationsEnabled
 import com.stepwise.ui.rememberNotificationRequest
+import com.stepwise.ui.rememberLocationRequest
+import com.stepwise.ui.VehicleCheatingDialog
+import com.stepwise.steps.VEHICLE_NOTIFICATION_ID
+import com.stepwise.steps.VehicleAlert
+import androidx.core.app.NotificationManagerCompat
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
@@ -156,11 +162,14 @@ class MainActivity : ComponentActivity() {
                 var notificationsOff by remember { mutableStateOf(!notificationsEnabled(this@MainActivity)) }
                 // Asks for the notification permission (Android 13+) before counting starts. Counting
                 // starts after the answer, granted or denied, so the service still runs without it.
-                val requestNotifications = rememberNotificationRequest {
+                // Asks for location (optional; it enables the vehicle check) after notifications.
+                // Counting starts after that answer too, granted or denied.
+                val requestLocation = rememberLocationRequest {
                     setCountingOn(applicationContext, true)
                     trackingActive = true
                     notificationsOff = !notificationsEnabled(this@MainActivity)
                 }
+                val requestNotifications = rememberNotificationRequest { requestLocation() }
                 fun startTracking() {
                     if (stepTrackingSource(this@MainActivity) is StepTrackingSource.None) {
                         sensorMissing = true
@@ -168,12 +177,21 @@ class MainActivity : ComponentActivity() {
                     }
                     requestNotifications()
                 }
+                // Set when a vehicle stopped counting. Recording is off until the user presses record.
+                val vehiclePending by VehicleAlert.pending.collectAsState()
+                LaunchedEffect(vehiclePending) {
+                    if (vehiclePending) trackingActive = false
+                }
                 val lifecycleOwner = LocalLifecycleOwner.current
                 DisposableEffect(lifecycleOwner) {
                     // Re-read on return, for example from the notification settings screen.
                     val observer = LifecycleEventObserver { _, event ->
-                        if (event == Lifecycle.Event.ON_RESUME) {
-                            notificationsOff = !notificationsEnabled(this@MainActivity)
+                        when (event) {
+                            Lifecycle.Event.ON_RESUME ->
+                                notificationsOff = !notificationsEnabled(this@MainActivity)
+                            Lifecycle.Event.ON_START -> { VehicleAlert.appVisible = true }
+                            Lifecycle.Event.ON_STOP -> { VehicleAlert.appVisible = false }
+                            else -> Unit
                         }
                     }
                     lifecycleOwner.lifecycle.addObserver(observer)
@@ -223,6 +241,11 @@ class MainActivity : ComponentActivity() {
                         permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
                     }
                 }
+
+                if (vehiclePending) VehicleCheatingDialog(onDismiss = {
+                    VehicleAlert.dismiss()
+                    NotificationManagerCompat.from(this@MainActivity).cancel(VEHICLE_NOTIFICATION_ID)
+                })
 
                 if (showOnboarding) OnboardingFlow(
                     onSaveProfile = { state ->

@@ -343,7 +343,7 @@ private fun PermissionsStep(
     PermissionCard(
         title = "Location (optional)",
         buttonLabel = "Allow Location",
-        detail = "Only used to calibrate your stride with GPS. Location is not stored or uploaded.",
+        detail = "Used to calibrate your stride with GPS and to detect vehicles while counting. Location is used only to detect vehicles and is never stored or uploaded.",
         granted = locationGranted,
         onAllow = onAllowLocation,
         skipped = locationSkipped,
