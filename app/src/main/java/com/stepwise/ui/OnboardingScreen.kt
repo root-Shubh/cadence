@@ -273,16 +273,8 @@ fun OnboardingFlow(
 @Composable
 private fun WelcomeStep() {
     Text("Welcome to Stepwise", style = MaterialTheme.typography.headlineSmall)
-    Text(
-        "Stepwise counts your steps and estimates calories. Everything stays on this phone.",
-        style = MaterialTheme.typography.bodyLarge,
-    )
-    Text(
-        "Nothing is uploaded. Uninstalling the app removes all of it.",
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-}
+    Text("Everything stays on this phone. Nothing is uploaded.", style = MaterialTheme.typography.bodyLarge)
+    FeatureCarousel(modifier = Modifier.padding(top = 8.dp))}
 
 @Composable
 private fun PermissionsStep(
