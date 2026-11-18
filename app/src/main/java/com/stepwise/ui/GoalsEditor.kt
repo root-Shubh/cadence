@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import com.stepwise.goals.effectiveGoals
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -36,6 +37,7 @@ fun GoalsEditor(
         mutableStateOf(current.monthlySteps?.toString().orEmpty())
     }
 
+    val auto = effectiveGoals(current)
     val dailyInput = parseGoalInput(daily)
     val weeklyInput = parseGoalInput(weekly)
     val monthlyInput = parseGoalInput(monthly)
@@ -57,13 +59,13 @@ fun GoalsEditor(
             isInvalid = dailyInput == GoalInput.Invalid,
         )
         GoalField(
-            label = "Weekly steps",
+            label = if (weekly.isBlank() && auto.weeklySteps != null) "Weekly steps (auto: " + String.format(java.util.Locale.ROOT, "%,d", auto.weeklySteps) + ")" else "Weekly steps",
             value = weekly,
             onValueChange = { weekly = it },
             isInvalid = weeklyInput == GoalInput.Invalid,
         )
         GoalField(
-            label = "Monthly steps",
+            label = if (monthly.isBlank() && auto.monthlySteps != null) "Monthly steps (auto: " + String.format(java.util.Locale.ROOT, "%,d", auto.monthlySteps) + ")" else "Monthly steps",
             value = monthly,
             onValueChange = { monthly = it },
             isInvalid = monthlyInput == GoalInput.Invalid,

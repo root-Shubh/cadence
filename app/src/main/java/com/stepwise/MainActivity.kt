@@ -227,7 +227,7 @@ class MainActivity : ComponentActivity() {
                                 }
                                 GoalsCard(
                                     points = history.map { StepPoint(it.dateIso, it.steps) },
-                                    goals = goals,
+                                    goals = effectiveGoals(goals),
                                     todayIso = today,
                                     modifier = Modifier.padding(horizontal = 16.dp),
                                     onSetGoals = { selected = Destination.PROFILE },
@@ -354,7 +354,7 @@ class MainActivity : ComponentActivity() {
                                     profileState = updated
                                 }
                             },
-                            currentSteps = { todayRow?.steps ?: 0 },
+                            currentSteps = { if (liveTracking) liveSteps else (todayRow?.steps ?: 0) },
                             modifier = modifier,
                         )
                     }

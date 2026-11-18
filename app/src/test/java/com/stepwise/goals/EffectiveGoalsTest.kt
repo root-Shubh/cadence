@@ -7,7 +7,7 @@ import org.junit.Test
 class EffectiveGoalsTest {
 
     @Test
-    fun weeklyAndMonthlyDerivedFromDaily() {
+    fun dailyDerivesWeeklyAndMonthly() {
         val result = effectiveGoals(Goals(dailySteps = 8000))
         assertEquals(56_000, result.weeklySteps)
         assertEquals(240_000, result.monthlySteps)
@@ -15,31 +15,39 @@ class EffectiveGoalsTest {
     }
 
     @Test
-    fun explicitWeeklyWinsOverDerived() {
+    fun explicitWeeklyWinsOverDerivedWeekly() {
         val result = effectiveGoals(Goals(dailySteps = 8000, weeklySteps = 50_000))
         assertEquals(50_000, result.weeklySteps)
         assertEquals(240_000, result.monthlySteps)
     }
 
     @Test
-    fun explicitMonthlyWinsOverDerived() {
+    fun explicitMonthlyWinsOverDerivedMonthly() {
         val result = effectiveGoals(Goals(dailySteps = 8000, monthlySteps = 200_000))
         assertEquals(56_000, result.weeklySteps)
         assertEquals(200_000, result.monthlySteps)
     }
 
     @Test
-    fun explicitValuesWinWhenBothSet() {
-        val goals = Goals(dailySteps = 8000, weeklySteps = 1, monthlySteps = 2)
+    fun explicitValuesWinWhenAllSet() {
+        val goals = Goals(dailySteps = 8000, weeklySteps = 50_000, monthlySteps = 200_000)
         assertEquals(goals, effectiveGoals(goals))
     }
 
     @Test
-    fun nullDailyLeavesWeeklyAndMonthlyAsSet() {
-        val result = effectiveGoals(Goals(weeklySteps = 40_000))
-        assertNull(result.dailySteps)
-        assertEquals(40_000, result.weeklySteps)
-        assertNull(result.monthlySteps)
+    fun weeklyOnlyDerivesDailyAndMonthly() {
+        val result = effectiveGoals(Goals(weeklySteps = 56_000))
+        assertEquals(8000, result.dailySteps)
+        assertEquals(56_000, result.weeklySteps)
+        assertEquals(240_000, result.monthlySteps)
+    }
+
+    @Test
+    fun monthlyOnlyDerivesDailyAndWeekly() {
+        val result = effectiveGoals(Goals(monthlySteps = 240_000))
+        assertEquals(8000, result.dailySteps)
+        assertEquals(56_000, result.weeklySteps)
+        assertEquals(240_000, result.monthlySteps)
     }
 
     @Test
