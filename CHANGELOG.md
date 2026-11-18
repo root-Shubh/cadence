@@ -1,0 +1,21 @@
+# Changelog
+
+## Unreleased
+
+## 1.0.0 - 2026-11-19
+
+First release. Proprietary license: all rights reserved (see LICENSE).
+
+- Renamed the app from Stepwise to Cadence: app name, theme names, storage keys and database file (`cadence.db`), CSV export file name (`cadence-export-<date>.csv`), profile export header and log tags. This is a proof of concept with no data to keep, so existing installs start fresh.
+- Step counting keeps going while the phone is locked. The hardware step counter now sets the total; detector steps only show as a lead until the counter reports, so steps the detector misses (locked phone, sensor warm-up, turning around) are no longer lost. Wake-up sensors are used when the phone has them, and the wake lock is renewed every minute for the whole session instead of lapsing ten minutes after the last step.
+- Starting counting no longer adds steps walked while it was off: the first counter reading is a fresh baseline, except after the process was killed mid-session.
+- Counting restarts by itself after a reboot or an app update when it was on.
+- The debug log is kept in a file, so it survives the app being killed and shows on the next launch. It records service creation, system restarts, swipe-away, every detector step, every save, and a heartbeat comparing detector and counter totals. The Debug card refreshes itself every two seconds.
+- The daily pattern is now its own Pattern tab after Trend. It draws the walk step by step, live, with no GPS: each step moves the pen one stride in the direction the phone faces (rotation sensors). The drawing scales to fit as it grows, so words and shapes can be walked. Pen up moves without drawing; New drawing starts again. The Today pager has three cards again: Daily, Weekly and Monthly.
+- The first steps of a walk show at once. Phones hold back about the first 10 steps; meanwhile the accelerometer shows them as provisional steps, which the step counter then confirms. Once the step sensor reports, accelerometer steps are ignored for the display; they show again only after a 3-second break in movement or when the sensor has been silent for 4 seconds while moving. At most 15 provisional steps show ahead of the sensor, and any it has not confirmed 10 seconds after the walk stops are dropped. Only steps the sensor confirms are saved. The timings come from measured walks (detector every 0.62 s, longest gap 1.87 s, held-back batches of 12 and 13).
+- Home widgets now follow the count while you walk. The step service asked them to redraw without their widget ids, which Android ignores, so they only refreshed every 30 minutes. All three widgets now redraw at most every 5 seconds while counting, the last count of a walk is never held back, and starting or stopping redraws them at once.
+- Redesigned home widgets: launcher-matched corners, 16 dp padding, a soft tinted surface with light and dark colours. Steps shows a large count, the goal, the percent and a thick rounded bar; Start/Stop has a play or stop icon and turns warm while counting; Goals has larger rings with the percent inside. All three show their real layout in the widget picker.
+- An info icon beside Record, and one on the Pattern tab, explains that holding the phone steady in front of you can stop the step sensor from recognising steps, and that a pocket or arm gives the best count.
+- The Record button shows whether counting is really running, and a press always does what it shows.
+- Added a Debug card, collapsed by default, on the Calibrate screen under Permissions. It lists the phone's step sensors (present or not), the live service state, and a log of sensor events, service start and stop, storage failures and a heartbeat each minute. The log can be copied or cleared. Use it to tell a hardware fault (sensor missing) from a software fault (sensor present but events or storage stop).
+- Project scaffold, Gradle build and CI

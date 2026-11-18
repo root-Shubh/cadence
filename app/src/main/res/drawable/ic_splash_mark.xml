@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Splash mark: the brand tile with the figure and arc. Splash icons are drawn in a 240dp box whose
+     visible circle is 160dp, so the tile (56..184) stays inside a radius-80 circle. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="240dp"
+    android:height="240dp"
+    android:viewportWidth="240"
+    android:viewportHeight="240">
+    <path
+        android:fillColor="@color/brand_primary"
+        android:pathData="M86,56 H154 A30,30 0 0 1 184,86 V154 A30,30 0 0 1 154,184 H86 A30,30 0 0 1 56,154 V86 A30,30 0 0 1 86,56 Z" />
+    <group
+        android:scaleX="0.36"
+        android:scaleY="0.36"
+        android:translateX="27.84"
+        android:translateY="27.84">
+        <path
+            android:pathData="M134.8,186 A140,140 0 0 1 377.2,186"
+            android:strokeColor="@color/brand_mint"
+            android:strokeWidth="16"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M256,146 A24,24 0 1 1 256,194 A24,24 0 1 1 256,146 Z" />
+        <path
+            android:pathData="M256,216 L256,284"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="32"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M256,236 L220,262 M256,236 L296,258"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="22"
+            android:strokeLineCap="round" />
+        <path
+            android:pathData="M256,284 L232,334 L214,378 M256,284 L284,330 L306,372"
+            android:strokeColor="#FFFFFF"
+            android:strokeWidth="26"
+            android:strokeLineCap="round"
+            android:strokeLineJoin="round" />
+    </group>
+</vector>

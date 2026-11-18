@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_surface">#141C1A</color>
+    <color name="widget_surface_tint">#1C3029</color>
+    <color name="widget_outline">#336FD6BC</color>
+
+    <color name="widget_text_primary">#E6F2EE</color>
+    <color name="widget_text_secondary">#9DB9B2</color>
+
+    <color name="widget_ring_progress">#6FD6BC</color>
+    <color name="widget_ring_track">#26413A</color>
+    <color name="widget_accent_on">#00382E</color>
+
+    <color name="widget_stop">#FF8A75</color>
+    <color name="widget_stop_on">#3D0A02</color>
+</resources>
