@@ -492,11 +492,11 @@ class StepCounterService : Service(), SensorEventListener {
     private fun clampToInt(value: Long): Int = value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
 
     /** The counts to store for the current day, read under [countLock]. */
-    private class Snapshot(val day: String, val counterTotal: Int, val raw: Long?)
+    private class Snapshot(val day: String, val counterTotal: Int, val displayed: Int, val raw: Long?)
 
     private fun snapshotLocked(): Snapshot? {
         val day = liveDay ?: return null
-        return Snapshot(day, counterTotalLocked(), sensorRaw)
+        return Snapshot(day, counterTotalLocked(), liveLocked(), sensorRaw)
     }
 
     /**
@@ -506,7 +506,9 @@ class StepCounterService : Service(), SensorEventListener {
      */
     private suspend fun flush(nowMillis: Long) {
         val snap = synchronized(countLock) { snapshotLocked() } ?: return
-        val candidate = snap.counterTotal
+        // Store what the screen shows, so stopping does not drop the accelerometer steps. The
+        // excess (stored minus counter total) is kept so the counter still reconciles on reload.
+        val candidate = snap.displayed
         if (snap.day == flushedDay && candidate == flushedTotal && snap.raw == flushedRaw) return
         try {
             val state: ProfileState? = ProfileStore(applicationContext).load()
