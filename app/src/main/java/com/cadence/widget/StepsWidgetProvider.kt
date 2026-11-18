@@ -12,6 +12,7 @@ import com.cadence.data.DEFAULT_PROFILE_ID
 import com.cadence.data.GoalsStore
 import com.cadence.data.ProfileStore
 import com.cadence.data.StepDatabase
+import com.cadence.steps.currentTodaySteps
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -58,8 +59,7 @@ class StepsWidgetProvider : AppWidgetProvider() {
     private suspend fun loadSnapshot(context: Context): Snapshot {
         val profileId = ProfileStore(context).activeProfileId() ?: DEFAULT_PROFILE_ID
         val today = LocalDate.now(ZoneId.systemDefault()).toString()
-        val steps = StepDatabase.getInstance(context).stepDayDao()
-            .getByDate(profileId, today)?.steps ?: 0
+        val steps = currentTodaySteps(context, profileId, today)
         val goal = GoalsStore(context).load().dailySteps
         return Snapshot(steps = steps, goal = goal)
     }

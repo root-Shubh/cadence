@@ -77,7 +77,7 @@ import java.util.concurrent.atomic.AtomicReference
  * SharedPreferences so the UI can explain why counting is unavailable.
  */
 /** Shortest time between two home-widget refresh broadcasts, in milliseconds. */
-private const val WIDGET_MIN_INTERVAL_MS: Long = 30_000L
+private const val WIDGET_MIN_INTERVAL_MS: Long = 5_000L
 
 class StepCounterService : Service(), SensorEventListener {
 

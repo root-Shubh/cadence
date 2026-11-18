@@ -10,6 +10,7 @@ import com.cadence.data.StepDatabase
 import com.cadence.goals.effectiveGoals
 import com.cadence.steps.StepTrackingSource
 import com.cadence.steps.hasActivityRecognition
+import com.cadence.steps.currentTodaySteps
 import com.cadence.steps.isCountingRunning
 import com.cadence.steps.stepTrackingSource
 import java.time.LocalDate
@@ -46,12 +47,16 @@ suspend fun loadGoalsSnapshot(context: Context): GoalsSnapshot {
         .getRange(profileId, from.toString(), today.toString())
         .mapNotNull { row -> runCatching { LocalDate.parse(row.dateIso) to row.steps }.getOrNull() }
 
-    fun sumSince(start: LocalDate): Int =
-        rows.filter { (date, _) -> !date.isBefore(start) && !date.isAfter(today) }.sumOf { it.second }
+    // Today comes from the live source, so the widgets match Today and the notification.
+    val todaySteps = currentTodaySteps(context, profileId, today.toString())
+    fun sumSince(start: LocalDate): Int {
+        val past = rows.filter { (date, _) -> !date.isBefore(start) && date.isBefore(today) }.sumOf { it.second }
+        return past + todaySteps
+    }
 
     val goals = effectiveGoals(GoalsStore(context).load())
     return GoalsSnapshot(
-        daily = PeriodProgress(sumSince(today), goals.dailySteps),
+        daily = PeriodProgress(todaySteps, goals.dailySteps),
         weekly = PeriodProgress(sumSince(weekStart), goals.weeklySteps),
         monthly = PeriodProgress(sumSince(monthStart), goals.monthlySteps),
     )
