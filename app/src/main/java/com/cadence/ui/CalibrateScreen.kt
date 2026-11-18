@@ -1,5 +1,7 @@
 package com.cadence.ui
 
+import android.os.Looper
+import android.util.Log
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
@@ -121,6 +123,9 @@ fun CalibrateScreen(
     val learnedStride = remember(walking) { StrideStore(context).load() }
     var permissionDenied by remember { mutableStateOf(false) }
     var distanceM by remember { mutableDoubleStateOf(0.0) }
+    // Latest GPS fix accuracy in metres (any fix, accepted or not), and how many fixes were used.
+    var gpsAccuracyM by remember { mutableStateOf<Float?>(null) }
+    var gpsFixesUsed by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
     // True when the user asked to start and the walk waits for permission and GPS.
     var pendingStart by remember { mutableStateOf(false) }
@@ -142,6 +147,14 @@ fun CalibrateScreen(
     val listener = remember {
         object : LocationListener {
             override fun onLocationChanged(location: Location) {
+                gpsAccuracyM = location.accuracy
+                val before = walk.distance.acceptedFixCount
+                Log.d(
+                    GPS_LOG_TAG,
+                    "fix lat=${"%.5f".format(location.latitude)} lon=${"%.5f".format(location.longitude)} " +
+                        "acc=${"%.1f".format(location.accuracy)}m speed=${"%.2f".format(location.speed)}m/s " +
+                        "time=${location.time} provider=${location.provider}",
+                )
                 distanceM = walk.distance.addFix(
                     GpsFix(
                         latitude = location.latitude,
@@ -150,6 +163,19 @@ fun CalibrateScreen(
                         timeMillis = location.time,
                     ),
                 )
+                gpsFixesUsed = walk.distance.acceptedFixCount
+                if (gpsFixesUsed == before) {
+                    Log.d(GPS_LOG_TAG, "fix rejected (accuracy above ${GpsDistance.MAX_ACCURACY_M} m, out of order, or too fast)")
+                }
+                Log.d(GPS_LOG_TAG, "distance=${"%.1f".format(distanceM)}m fixes=$gpsFixesUsed")
+            }
+
+            override fun onProviderEnabled(provider: String) {
+                Log.d(GPS_LOG_TAG, "provider enabled: $provider")
+            }
+
+            override fun onProviderDisabled(provider: String) {
+                Log.d(GPS_LOG_TAG, "provider disabled: $provider")
             }
 
             @Deprecated("Deprecated in API 29")
@@ -382,6 +408,7 @@ fun CalibrateScreen(
         }
 
         Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             StatCard(
                 label = "Distance",
                 icon = Icons.Filled.Route,
@@ -395,6 +422,20 @@ fun CalibrateScreen(
                     )
                 },
             )
+            if (walking) {
+                Text(
+                    text = when {
+                        gpsFixesUsed == 0 && gpsAccuracyM == null ->
+                            "Waiting for GPS. Walk outdoors with a clear view of the sky."
+                        gpsFixesUsed == 0 ->
+                            "GPS accuracy is ${"%.0f".format(gpsAccuracyM)} m. Needs 15 m or better to count distance."
+                        else -> "GPS locked ($gpsFixesUsed fixes), accuracy ${"%.0f".format(gpsAccuracyM ?: 0f)} m"
+                    },
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            }
         }
         Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
             StatCard(
@@ -589,10 +630,15 @@ private class CountingHolder {
 /** Only called after location permission has been granted. */
 @SuppressLint("MissingPermission")
 private fun startGps(locationManager: LocationManager, listener: LocationListener) {
+    // No minimum time or distance: every fix the GPS produces is delivered on the main looper.
+    Log.d(GPS_LOG_TAG, "requesting GPS updates")
     locationManager.requestLocationUpdates(
         LocationManager.GPS_PROVIDER,
-        1000L,
+        0L,
         0f,
         listener,
+        Looper.getMainLooper(),
     )
 }
+
+private const val GPS_LOG_TAG = "CadenceGps"
