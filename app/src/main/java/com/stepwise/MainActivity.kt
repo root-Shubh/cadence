@@ -5,12 +5,14 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -75,6 +77,7 @@ private const val HISTORY_DAYS = 60L
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
         // Leave the splash theme for the normal app theme once the Activity is up.
         setTheme(R.style.Theme_Stepwise)
         val profileStore = ProfileStore(applicationContext)
@@ -172,7 +175,7 @@ class MainActivity : ComponentActivity() {
                         refreshProfiles()
                         showOnboarding = false
                     },
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.fillMaxSize().statusBarsPadding(),
                 ) else AppShell(selected = selected, onSelect = { selected = it }) { padding ->
                     val modifier = Modifier.padding(padding)
                     when (selected) {
@@ -193,10 +196,13 @@ class MainActivity : ComponentActivity() {
                                     goals = goals,
                                     todayIso = today,
                                     modifier = Modifier.padding(horizontal = 16.dp),
+                                    onSetGoals = { selected = Destination.PROFILE },
                                 )
                                 TodayScreen(
                                     day = todayDayMetrics(todayRow, profile),
                                     profileMissing = profile == null,
+                                    dailyGoal = goals.dailySteps,
+                                    history = history,
                                     trackingActive = trackingActive,
                                     onStartTracking = {
                                         if (hasActivityRecognition()) {
@@ -335,7 +341,8 @@ class MainActivity : ComponentActivity() {
  * otherwise a zero-step estimate from the profile. Null when there is no usable profile.
  */
 private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?): DayMetrics? {
-    if (row != null && row.totalKcal > 0.0) {
+    // A stored row always wins for steps. Without a profile its distance and calories are 0.
+    if (row != null && (row.totalKcal > 0.0 || profile == null)) {
         return DayMetrics(
             steps = row.steps,
             distanceM = row.distanceM,

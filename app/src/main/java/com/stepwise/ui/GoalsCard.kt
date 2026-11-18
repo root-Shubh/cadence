@@ -4,8 +4,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -33,14 +35,36 @@ fun GoalsCard(
     goals: Goals,
     todayIso: String,
     modifier: Modifier = Modifier,
+    onSetGoals: () -> Unit = {},
 ) {
     if (goals.dailySteps == null && goals.weeklySteps == null && goals.monthlySteps == null) {
-        Text(
-            text = "Set a daily, weekly or monthly goal in Profile to see progress.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = modifier,
-        )
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+            modifier = modifier.fillMaxWidth(),
+        ) {
+            Column(
+                modifier = Modifier.padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    text = "Goals",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+                Text(
+                    text = "Set a daily, weekly or monthly goal to see progress.",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                FilledTonalButton(
+                    onClick = onSetGoals,
+                    modifier = Modifier.height(48.dp),
+                ) {
+                    Text("Set goals")
+                }
+            }
+        }
         return
     }
 
@@ -132,7 +156,7 @@ private fun GoalCardBody(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             LinearProgressIndicator(
-                progress = fraction,
+                progress = { fraction },
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(vertical = 8.dp),

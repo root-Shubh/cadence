@@ -10,7 +10,9 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
@@ -72,7 +74,11 @@ fun AppShell(
         label = "pillIcon",
     )
 
+    // Edge-to-edge: the top sits below the status bar and camera cutout; the navigation bar
+    // stays handled by the bottom NavigationBar's own inset.
     Scaffold(
+        modifier = Modifier.statusBarsPadding(),
+        contentWindowInsets = WindowInsets(0, 0, 0, 0),
         bottomBar = {
             NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
                 Destination.values().forEach { destination ->
