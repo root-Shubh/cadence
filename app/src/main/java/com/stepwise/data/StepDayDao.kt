@@ -18,6 +18,9 @@ interface StepDayDao {
     @Query("SELECT * FROM step_days WHERE dateIso BETWEEN :fromIso AND :toIso ORDER BY dateIso ASC")
     suspend fun getRange(fromIso: String, toIso: String): List<StepDayEntity>
 
+    @Query("DELETE FROM step_days")
+    suspend fun deleteAll()
+
     @Query("SELECT * FROM step_days WHERE dateIso BETWEEN :fromIso AND :toIso ORDER BY dateIso ASC")
     fun getRangeFlow(fromIso: String, toIso: String): Flow<List<StepDayEntity>>
 }
