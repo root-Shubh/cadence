@@ -54,6 +54,7 @@ import com.cadence.gps.GpsDistance
 import com.cadence.gps.GpsFix
 import com.cadence.gps.StrideResult
 import com.cadence.gps.strideFromWalk
+import com.cadence.steps.StrideStore
 import kotlinx.coroutines.delay
 
 @Composable
@@ -71,6 +72,8 @@ fun CalibrateScreen(
     val buttonSource = remember { MutableInteractionSource() }
 
     var walking by remember { mutableStateOf(false) }
+    // The GPS-learned stride. Read again whenever a walk starts or stops, when the service may have learned more.
+    val learnedStride = remember(walking) { StrideStore(context).load() }
     var permissionDenied by remember { mutableStateOf(false) }
     var distanceM by remember { mutableDoubleStateOf(0.0) }
     var startSteps by remember { mutableIntStateOf(0) }
@@ -321,8 +324,14 @@ fun CalibrateScreen(
 
         if (!walking && message == null) {
             Reveal(index = 4, modifier = Modifier.fillMaxWidth()) {
+                val learnedCm = learnedStride.usableCm()
                 Text(
-                    "Your stride is estimated from your height until you calibrate.",
+                    if (learnedCm == null) {
+                        "Your stride is estimated from your height until you calibrate."
+                    } else {
+                        "Stride learned from walking: ${"%.0f".format(learnedCm)} cm " +
+                            "(based on ${learnedStride.walks} ${if (learnedStride.walks == 1) "walk" else "walks"})"
+                    },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

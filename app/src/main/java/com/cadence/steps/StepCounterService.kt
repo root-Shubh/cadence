@@ -94,8 +94,15 @@ class StepCounterService : Service(), SensorEventListener {
     private var tickerJob: Job? = null
     private var notifyJob: Job? = null
 
-    // Vehicle check. Touched only on the main thread.
-    private val vehicleDetector = VehicleDetector()
+    // Walking pace and vehicle check. Touched only on the main thread.
+    private val walkingPace = WalkingPace()
+
+    // GPS stride learning and recent accelerometer step times for the cadence. Main thread only,
+    // except learnedCm, which the consumer reads when it computes the stored distance.
+    private val strideStore by lazy { StrideStore(this) }
+    private var strideEstimator = StrideEstimator()
+    private val recentStepMillis = ArrayDeque<Long>()
+    @Volatile private var learnedCm: Double? = null
     private var locationManager: LocationManager? = null
     private var locationListener: LocationListener? = null
     private var lastPlan: ServicePlan? = null
@@ -159,6 +166,8 @@ class StepCounterService : Service(), SensorEventListener {
         wakeLock = getSystemService(PowerManager::class.java)
             ?.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKE_LOCK_TAG)
             ?.apply { setReferenceCounted(false) }
+        strideEstimator = strideStore.load()
+        learnedCm = strideEstimator.usableCm()
 
         consumerJob = scope.launch {
             for (ignored in wakeups) {
@@ -240,7 +249,7 @@ class StepCounterService : Service(), SensorEventListener {
         } else if (vehiclePaused) {
             // The user pressed record again after a vehicle stop. Detection starts fresh.
             vehiclePaused = false
-            vehicleDetector.reset()
+            walkingPace.reset()
             beginCounting(plan)
         }
         return START_STICKY
@@ -409,7 +418,10 @@ class StepCounterService : Service(), SensorEventListener {
 
     /** Accelerometer step (main thread): counts it and updates the live total. */
     private fun onSoftwareStep() {
+        // A vehicle has been detected: accelerometer steps are not counted until counting resumes.
+        if (vehiclePaused) return
         val now = System.currentTimeMillis()
+        recordStepForCadence(now)
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
         val live = synchronized(countLock) {
             rollDayLocked(now)
@@ -423,6 +435,20 @@ class StepCounterService : Service(), SensorEventListener {
         }
         LiveSteps.reset(live)
         wakeups.trySend(Unit)
+    }
+
+    /** Keeps the accelerometer step times of the last [CADENCE_WINDOW_MS] for the cadence. Main thread. */
+    private fun recordStepForCadence(nowMillis: Long) {
+        recentStepMillis.addLast(nowMillis)
+        while (recentStepMillis.isNotEmpty() && nowMillis - recentStepMillis.first() > CADENCE_WINDOW_MS) {
+            recentStepMillis.removeFirst()
+        }
+    }
+
+    /** Steps per second over the cadence window, or null when there are too few steps to judge. Main thread. */
+    private fun cadenceHz(nowMillis: Long): Double? {
+        val recent = recentStepMillis.count { nowMillis - it <= CADENCE_WINDOW_MS }
+        return if (recent >= 2) recent.toDouble() / (CADENCE_WINDOW_MS / 1000.0) else null
     }
 
     /** Starts a new day's counts from zero when the calendar day changes. Call under [countLock]. */
@@ -530,7 +556,7 @@ class StepCounterService : Service(), SensorEventListener {
     private fun toEntity(state: ProfileState?, profileId: String, dateIso: String, steps: Int): StepDayEntity {
         val profile = toDomainProfile(state)
             ?: return StepDayEntity(dateIso, steps, 0.0, 0.0, 0.0, 0.0, 0.0, profileId)
-        val m = computeDay(profile, steps)
+        val m = computeDay(profile, steps, learnedCm)
         return StepDayEntity(
             dateIso = dateIso,
             steps = m.steps,
@@ -585,17 +611,31 @@ class StepCounterService : Service(), SensorEventListener {
         locationManager = null
     }
 
-    /** Main thread. Only the speed is used; coordinates are never kept. */
+    /**
+     * Main thread. Only the speed and accuracy are used; coordinates are never kept. The walking
+     * pace check finds vehicles. While walking, a fix can also give a stride sample.
+     */
     private fun onGpsFix(location: Location) {
         if (destroyed) return
         if (!location.hasSpeed() || !location.hasAccuracy()) return
-        if (location.accuracy > GPS_MAX_ACCURACY_M) return
         val kmh = location.speed.toDouble() * MPS_TO_KMH
-        when (val event = vehicleDetector.onSpeed(kmh, System.currentTimeMillis())) {
+        val accuracy = location.accuracy.toDouble()
+        val now = System.currentTimeMillis()
+        val update = walkingPace.onFix(kmh, accuracy, now) ?: return
+        when (val event = update.vehicleEvent) {
             is VehicleStarted -> onVehicleStarted(event.startTimeMillis)
             VehicleEnded -> onVehicleEnded()
             null -> Unit
         }
+        if (update.state == PaceState.WALKING && !vehiclePaused) learnStride(kmh, accuracy, now)
+    }
+
+    /** Main thread. Feeds one walking fix to the stride learner and stores the result when it changes. */
+    private fun learnStride(kmh: Double, accuracy: Double, nowMillis: Long) {
+        val accepted = strideEstimator.onFix(kmh, accuracy, nowMillis, cadenceHz(nowMillis))
+        if (accepted == null) return
+        learnedCm = strideEstimator.usableCm()
+        strideStore.save(strideEstimator)
     }
 
     /**
@@ -833,6 +873,9 @@ class StepCounterService : Service(), SensorEventListener {
         private const val GPS_MAX_ACCURACY_M = 20f
         private const val GPS_INTERVAL_MS = 1000L
         private const val MPS_TO_KMH = 3.6
+
+        /** Window over which the step cadence is measured, in milliseconds. */
+        private const val CADENCE_WINDOW_MS = 4_000L
         private const val VEHICLE_PREFS_NAME = "stepwise_vehicle"
         private const val KEY_VEHICLE_LOG = "log"
 

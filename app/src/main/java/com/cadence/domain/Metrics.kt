@@ -56,12 +56,16 @@ fun bmrKcal(weightKg: Double, heightCm: Double, age: Int, sex: Sex): Double {
     }
 }
 
-/** Stride length in cm: override if provided, otherwise a height-based estimate. */
-fun strideCm(heightCm: Double, sex: Sex, overrideCm: Double? = null): Double {
+/**
+ * Stride length in cm. Order: the profile override if set (it always wins), then the GPS-learned
+ * stride [learnedCm] if given, otherwise the height-based estimate.
+ */
+fun strideCm(heightCm: Double, sex: Sex, overrideCm: Double? = null, learnedCm: Double? = null): Double {
     overrideCm?.let {
         require(it > 0) { "strideOverrideCm must be > 0, was $it" }
         return it
     }
+    learnedCm?.let { if (it > 0) return it }
     require(heightCm > 0) { "heightCm must be > 0, was $heightCm" }
     return when (sex) {
         Sex.MALE -> heightCm * STRIDE_FACTOR_MALE
@@ -71,9 +75,9 @@ fun strideCm(heightCm: Double, sex: Sex, overrideCm: Double? = null): Double {
 }
 
 /** Computes all metrics for one day from a step count. Negative steps throw. */
-fun computeDay(profile: Profile, steps: Int): DayMetrics {
+fun computeDay(profile: Profile, steps: Int, learnedCm: Double? = null): DayMetrics {
     require(steps >= 0) { "steps must be >= 0, was $steps" }
-    val stride = strideCm(profile.heightCm, profile.sex, profile.strideOverrideCm)
+    val stride = strideCm(profile.heightCm, profile.sex, profile.strideOverrideCm, learnedCm)
     val distanceM = steps * stride / 100.0
     val distanceKm = distanceM / 1000.0
     val activeKcal = WALK_KCAL_PER_KG_KM * profile.weightKg * distanceKm

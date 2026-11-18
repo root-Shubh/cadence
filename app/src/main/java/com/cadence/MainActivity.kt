@@ -43,6 +43,7 @@ import com.cadence.export.mergeImported
 import com.cadence.export.parseDailyCsv
 import com.cadence.goals.effectiveGoals
 import com.cadence.steps.LiveSteps
+import com.cadence.steps.StrideStore
 import com.cadence.steps.appNotificationSettingsIntent
 import com.cadence.steps.notificationsEnabled
 import com.cadence.ui.rememberNotificationRequest
@@ -257,6 +258,8 @@ class MainActivity : ComponentActivity() {
                 // Live count from the step service while it runs; the Room row otherwise.
                 val liveSteps by LiveSteps.steps.collectAsState()
                 val liveTracking by LiveSteps.tracking.collectAsState()
+                // The GPS-learned stride, read again each time counting changes.
+                val learnedStrideCm = remember(liveTracking) { StrideStore(applicationContext).usableCm() }
                 // Goals with weekly and monthly values filled in from the daily goal.
                 val eff = effectiveGoals(goals)
                 val countingStatusText by produceState<String?>(initialValue = null, trackingActive) {
@@ -336,7 +339,12 @@ class MainActivity : ComponentActivity() {
                                     onSetGoals = { selected = Destination.PROFILE },
                                 )
                                 TodayScreen(
-                                    day = todayDayMetrics(todayRow, profile, if (liveTracking) liveSteps else null),
+                                    day = todayDayMetrics(
+                                        todayRow,
+                                        profile,
+                                        if (liveTracking) liveSteps else null,
+                                        learnedStrideCm,
+                                    ),
                                     profileMissing = profile == null,
                                     dailyGoal = eff.dailySteps,
                                     weeklyGoal = eff.weeklySteps,
@@ -537,11 +545,16 @@ class MainActivity : ComponentActivity() {
  * Today's metrics: the stored row when it exists (the step service keeps it up to date),
  * otherwise a zero-step estimate from the profile. Null when there is no usable profile.
  */
-private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?, liveSteps: Int?): DayMetrics? {
+private fun todayDayMetrics(
+    row: StepDayEntity?,
+    profile: Profile?,
+    liveSteps: Int?,
+    learnedStrideCm: Double? = null,
+): DayMetrics? {
     // While counting, the live count wins: recomputed from the profile, or steps only without one.
     if (liveSteps != null) {
         return if (profile != null) {
-            computeDay(profile, liveSteps)
+            computeDay(profile, liveSteps, learnedStrideCm)
         } else {
             DayMetrics(
                 steps = liveSteps,
@@ -564,7 +577,7 @@ private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?, liveSteps: I
             totalKcal = row.totalKcal,
         )
     }
-    return profile?.let { computeDay(it, row?.steps ?: 0) }
+    return profile?.let { computeDay(it, row?.steps ?: 0, learnedStrideCm) }
 }
 
 /** Maps an imported CSV row to a stored day for [profileId]. */

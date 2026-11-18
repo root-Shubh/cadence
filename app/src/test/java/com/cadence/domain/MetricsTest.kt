@@ -9,6 +9,19 @@ class MetricsTest {
     private val delta = 1e-6
 
     @Test
+    fun learnedStrideSitsBetweenOverrideAndHeightEstimate() {
+        assertEquals(72.0, strideCm(180.0, Sex.MALE, null, 72.0), delta)
+        assertEquals(80.0, strideCm(180.0, Sex.MALE, 80.0, 72.0), delta)
+        assertEquals(74.7, strideCm(180.0, Sex.MALE, null, null), delta)
+    }
+
+    @Test
+    fun computeDayUsesLearnedStride() {
+        val m = computeDay(Profile(180.0, 80.0, 30, Sex.MALE), 10_000, learnedCm = 72.0)
+        assertEquals(7_200.0, m.distanceM, delta)
+    }
+
+    @Test
     fun maleFormulas() {
         // BMR = 10*80 + 6.25*180 - 5*30 + 5 = 1780; RMR = 1958
         // stride = 180*0.415 = 74.7 cm; distance = 10000*74.7/100 = 7470 m
