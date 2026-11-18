@@ -43,7 +43,11 @@ import com.stepwise.export.csvFileName
 import com.stepwise.steps.StepCounterService
 import com.stepwise.steps.StepSensorState
 import com.stepwise.steps.stepSensorState
+import com.stepwise.data.GoalsStore
+import com.stepwise.goals.StepPoint
 import com.stepwise.ui.AppShell
+import com.stepwise.ui.GoalsCard
+import com.stepwise.ui.GoalsEditor
 import com.stepwise.ui.CalibrateScreen
 import com.stepwise.ui.Destination
 import com.stepwise.ui.PrivacyNotice
@@ -65,6 +69,7 @@ class MainActivity : ComponentActivity() {
         val dataReset = DataReset(profileStore, dao)
         val themePrefs = ThemePrefs(applicationContext)
         val privacyPrefs = PrivacyPrefs(applicationContext)
+        val goalsStore = GoalsStore(applicationContext)
 
         setContent {
             var themeChoice by remember { mutableStateOf(themePrefs.load()) }
@@ -81,6 +86,7 @@ class MainActivity : ComponentActivity() {
                 var trackingActive by rememberSaveable { mutableStateOf(false) }
                 var sensorMissing by rememberSaveable { mutableStateOf(false) }
                 var privacyHidden by rememberSaveable { mutableStateOf(false) }
+                var goals by remember { mutableStateOf(goalsStore.load()) }
                 val today = LocalDate.now().toString()
 
                 // Checks for a step counter first, so the service never starts without one (STEPW-23).
@@ -129,6 +135,12 @@ class MainActivity : ComponentActivity() {
                                         },
                                     )
                                 }
+                                GoalsCard(
+                                    points = history.map { StepPoint(it.dateIso, it.steps) },
+                                    goals = goals,
+                                    todayIso = today,
+                                    modifier = Modifier.padding(horizontal = 16.dp),
+                                )
                                 TodayScreen(
                                     day = todayDayMetrics(todayRow, profile),
                                     profileMissing = profile == null,
@@ -140,7 +152,7 @@ class MainActivity : ComponentActivity() {
                                             permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
                                         }
                                     },
-                                    modifier = Modifier.fillMaxSize(),
+                                    modifier = Modifier.weight(1f),
                                     sensorMissing = sensorMissing,
                                 )
                             }
@@ -177,6 +189,16 @@ class MainActivity : ComponentActivity() {
                                     val csv = buildDailyCsv(rows.toCsvRows())
                                     startActivity(CsvExporter.export(applicationContext, csv, csvFileName(today)))
                                 }
+                            },
+                            goalsSection = {
+                                GoalsEditor(
+                                    current = goals,
+                                    onSave = { updated ->
+                                        goalsStore.save(updated)
+                                        goals = updated
+                                    },
+                                    modifier = Modifier.padding(top = 16.dp),
+                                )
                             },
                         )
                         Destination.CALIBRATE -> CalibrateScreen(

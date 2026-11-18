@@ -76,6 +76,7 @@ fun ProfileScreen(
     onDeleteProfile: () -> Unit = {},
     onDeleteAllData: () -> Unit = {},
     onExportCsv: () -> Unit = {},
+    goalsSection: @Composable () -> Unit = {},
 ) {
     var height by remember { mutableStateOf(formatMeasure(initial?.heightCm)) }
     var weight by remember { mutableStateOf(formatMeasure(initial?.weightKg)) }
@@ -253,6 +254,7 @@ fun ProfileScreen(
                 Text("Delete all recorded data")
             }
         }
+        goalsSection()
     }
 
     if (confirmDeleteProfile) {
