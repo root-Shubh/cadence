@@ -24,6 +24,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -115,6 +116,7 @@ fun PermissionsPanel(modifier: Modifier = Modifier) {
                 ),
                 onAllow = { activityLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION) },
                 onOpenSettings = { startIntent(context, appSettingsIntent(context)) },
+                manageable = true,
             )
 
             PermissionRow(
@@ -137,6 +139,7 @@ fun PermissionsPanel(modifier: Modifier = Modifier) {
                     )
                 },
                 onOpenSettings = { startIntent(context, appSettingsIntent(context)) },
+                manageable = true,
             )
 
             PermissionRow(
@@ -152,6 +155,7 @@ fun PermissionsPanel(modifier: Modifier = Modifier) {
                 ),
                 onAllow = { notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
                 onOpenSettings = { startIntent(context, appSettingsIntent(context)) },
+                manageable = true,
             )
 
             PermissionRow(
@@ -163,6 +167,12 @@ fun PermissionsPanel(modifier: Modifier = Modifier) {
                 turnOnLabel = "Turn on",
                 onTurnOn = { startIntent(context, Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
                 onOpenSettings = { startIntent(context, Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
+            )
+
+            Text(
+                "Android only lets you revoke permissions in system settings.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
     }
@@ -184,12 +194,14 @@ private fun PermissionRow(
     offLabel: Boolean = false,
     turnOnLabel: String? = null,
     onTurnOn: () -> Unit = {},
+    manageable: Boolean = false,
 ) {
     val status = when {
         granted -> "Granted"
         offLabel -> "Off"
         else -> "Not granted"
     }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -241,6 +253,18 @@ private fun PermissionRow(
                 }
             }
         }
+    }
+    if (manageable) {
+        // Outside the merged row, so TalkBack reaches this button on its own.
+        TextButton(
+            onClick = onOpenSettings,
+            modifier = Modifier
+                .heightIn(min = 48.dp)
+                .semantics { contentDescription = "Manage $name in system settings" },
+        ) {
+            Text("Manage in system settings")
+        }
+    }
     }
 }
 

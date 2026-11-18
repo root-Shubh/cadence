@@ -465,13 +465,18 @@ class MainActivity : ComponentActivity() {
                         ) }
                         Destination.CALIBRATE -> CalibrateScreen(
                             saveStride = { cm ->
-                                profileStore.load()?.let { current ->
+                                val current = profileStore.load()
+                                if (current == null) {
+                                    false
+                                } else {
+                                    // The calibrated stride becomes the explicit override, so distance uses it now.
                                     val updated = current.copy(strideOverrideCm = cm)
                                     profileStore.save(updated)
                                     profileState = updated
+                                    true
                                 }
                             },
-                            currentSteps = { if (liveTracking) liveSteps else (todayRow?.steps ?: 0) },
+                            savedStrideCm = profileState?.strideOverrideCm,
                             modifier = modifier,
                         )
                     }

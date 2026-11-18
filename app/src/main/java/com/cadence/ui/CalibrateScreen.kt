@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -35,6 +36,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
@@ -54,13 +56,29 @@ import com.cadence.gps.GpsDistance
 import com.cadence.gps.GpsFix
 import com.cadence.gps.StrideResult
 import com.cadence.gps.strideFromWalk
+import com.cadence.steps.LiveSteps
+import com.cadence.steps.StepTrackingSource
 import com.cadence.steps.StrideStore
-import kotlinx.coroutines.delay
+import com.cadence.steps.hasActivityRecognition
+import com.cadence.steps.isCountingOn
+import com.cadence.steps.setCountingOn
+import com.cadence.steps.stepTrackingSource
 
+/** Steps at which a calibration walk stops on its own. */
+const val CALIBRATION_TARGET_STEPS: Int = 50
+
+/** True once a calibration walk has counted [targetSteps] steps, so it should stop on its own. */
+fun shouldAutoStop(steps: Int, targetSteps: Int = CALIBRATION_TARGET_STEPS): Boolean =
+    steps >= targetSteps
+
+/**
+ * [saveStride] stores a successful stride and returns false when nothing could be saved.
+ * [savedStrideCm] is the stride currently saved in the profile, shown on the screen.
+ */
 @Composable
 fun CalibrateScreen(
-    saveStride: (Double) -> Unit,
-    currentSteps: () -> Int,
+    saveStride: (Double) -> Boolean,
+    savedStrideCm: Double?,
     modifier: Modifier = Modifier,
 ) {
     val context = LocalContext.current
@@ -70,14 +88,22 @@ fun CalibrateScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val walk = remember { WalkHolder() }
     val buttonSource = remember { MutableInteractionSource() }
+    // Set when this screen turned counting on, so it can turn it off again.
+    val counting = remember { CountingHolder() }
+
+    // Live total from the step service. The walk shows the steps since it started.
+    val liveTotal by LiveSteps.steps.collectAsState()
+    val tracking by LiveSteps.tracking.collectAsState()
 
     var walking by remember { mutableStateOf(false) }
+    // Total at the moment the walk's counting began; null until the step service is tracking.
+    var baseline by remember { mutableStateOf<Int?>(null) }
+    // Steps of the last walk, or of the walk so far while paused.
+    var lastSteps by remember { mutableIntStateOf(0) }
     // The GPS-learned stride. Read again whenever a walk starts or stops, when the service may have learned more.
     val learnedStride = remember(walking) { StrideStore(context).load() }
     var permissionDenied by remember { mutableStateOf(false) }
     var distanceM by remember { mutableDoubleStateOf(0.0) }
-    var startSteps by remember { mutableIntStateOf(0) }
-    var liveSteps by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
     // True when the user asked to start and the walk waits for permission and GPS.
     var pendingStart by remember { mutableStateOf(false) }
@@ -86,9 +112,15 @@ fun CalibrateScreen(
     var resumeCount by remember { mutableIntStateOf(0) }
     // True when GPS was switched off mid-walk: the walk is paused and resumes once GPS is back on.
     var gpsPaused by remember { mutableStateOf(false) }
-    var pausedSteps by remember { mutableIntStateOf(0) }
     // Bumped on every location provider change while a walk runs or is paused, and on resume.
     var gpsEvents by remember { mutableIntStateOf(0) }
+
+    // Steps since the walk started. Zero before the step service is tracking.
+    val shownSteps = if (walking) {
+        baseline?.let { (liveTotal - it).coerceAtLeast(0) } ?: 0
+    } else {
+        lastSteps
+    }
 
     val listener = remember {
         object : LocationListener {
@@ -108,18 +140,47 @@ fun CalibrateScreen(
         }
     }
 
-    // Live step count while walking.
-    LaunchedEffect(walking) {
-        while (walking) {
-            liveSteps = currentSteps() - startSteps
-            delay(1000)
+    // Takes the baseline once the step service is tracking, so steps before the walk are not counted.
+    LaunchedEffect(walking, tracking) {
+        if (walking && tracking && baseline == null) {
+            baseline = LiveSteps.steps.value
         }
+    }
+
+    // Ends the walk: the result is shown, and saved when it is valid.
+    fun finishWalk() {
+        val steps = shownSteps
+        walking = false
+        gpsPaused = false
+        baseline = null
+        lastSteps = steps
+        stopCountingIfStarted(context, counting)
+        when (val result = strideFromWalk(distanceM, steps)) {
+            is StrideResult.Success -> {
+                message = if (saveStride(result.strideCm)) {
+                    "Stride saved: ${"%.1f".format(result.strideCm)} cm, used for distance from now on"
+                } else {
+                    "Not saved: create a profile first"
+                }
+            }
+            is StrideResult.Rejected -> message = "Not saved: ${result.reason}"
+        }
+    }
+
+    // Stops the walk on its own at the target step count. The user can still press Stop earlier.
+    LaunchedEffect(walking, shownSteps) {
+        if (walking && shouldAutoStop(shownSteps)) finishWalk()
     }
 
     // GPS listener is registered only while walking and removed on Stop or when leaving the screen.
     DisposableEffect(walking) {
         if (walking) startGps(locationManager, listener)
         onDispose { locationManager.removeUpdates(listener) }
+    }
+
+    // Leaving the screen ends any counting this screen started.
+    DisposableEffect(Unit) {
+        onDispose { stopCountingIfStarted(context, counting) }
     }
 
     // The single place that decides whether a walk can start: it needs location permission
@@ -131,19 +192,32 @@ fun CalibrateScreen(
             permissionDenied = true
             return
         }
-        if (isGpsEnabled(locationManager)) {
-            pendingStart = false
-            showGpsDialog = false
-            walk.distance = GpsDistance()
-            distanceM = 0.0
-            startSteps = currentSteps()
-            liveSteps = 0
-            message = null
-            walking = true
-        } else {
+        if (!isGpsEnabled(locationManager)) {
             pendingStart = true
             showGpsDialog = true
+            return
         }
+        pendingStart = false
+        showGpsDialog = false
+        if (!hasActivityRecognition(context)) {
+            message = "Allow physical activity in Permissions to count steps."
+            return
+        }
+        if (stepTrackingSource(context) is StepTrackingSource.None) {
+            message = "This phone has no step sensor."
+            return
+        }
+        // Calibration counts steps itself: turn counting on when it is not already running.
+        if (!LiveSteps.tracking.value) {
+            counting.startedHere = !isCountingOn(context)
+            setCountingOn(context, true)
+        }
+        walk.distance = GpsDistance()
+        distanceM = 0.0
+        baseline = null
+        lastSteps = 0
+        message = null
+        walking = true
     }
 
     val permissionLauncher = rememberLauncherForActivityResult(
@@ -201,14 +275,14 @@ fun CalibrateScreen(
         if (gpsEvents == 0) return@LaunchedEffect
         val enabled = isGpsEnabled(locationManager)
         if (walking && !enabled) {
-            pausedSteps = currentSteps() - startSteps
-            liveSteps = pausedSteps
+            lastSteps = shownSteps
+            baseline = null
             message = null
             walking = false
             gpsPaused = true
         } else if (gpsPaused && enabled) {
             gpsPaused = false
-            startSteps = currentSteps() - pausedSteps
+            baseline = LiveSteps.steps.value - lastSteps
             walking = true
         } else if (pendingStart && enabled) {
             tryStart()
@@ -237,7 +311,8 @@ fun CalibrateScreen(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text("Calibrate stride", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    "Walk a measured route of at least 50 m and 50 steps, then press Stop. " +
+                    "Walk a measured route of at least 50 m and 50 steps. The walk stops by itself " +
+                        "at $CALIBRATION_TARGET_STEPS steps, or press Stop earlier. " +
                         "Your stride length is calculated from the distance and steps.",
                     style = MaterialTheme.typography.bodyMedium,
                 )
@@ -314,7 +389,7 @@ fun CalibrateScreen(
                 tone = Tone.PRIMARY,
                 value = {
                     AnimatedCountText(
-                        value = liveSteps,
+                        value = shownSteps,
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
@@ -326,11 +401,14 @@ fun CalibrateScreen(
             Reveal(index = 4, modifier = Modifier.fillMaxWidth()) {
                 val learnedCm = learnedStride.usableCm()
                 Text(
-                    if (learnedCm == null) {
-                        "Your stride is estimated from your height until you calibrate."
-                    } else {
-                        "Stride learned from walking: ${"%.0f".format(learnedCm)} cm " +
-                            "(based on ${learnedStride.walks} ${if (learnedStride.walks == 1) "walk" else "walks"})"
+                    when {
+                        savedStrideCm != null ->
+                            "Saved stride: ${"%.1f".format(savedStrideCm)} cm. It is used for distance " +
+                                "until you calibrate again."
+                        learnedCm != null ->
+                            "Stride learned from walking: ${"%.0f".format(learnedCm)} cm " +
+                                "(based on ${learnedStride.walks} ${if (learnedStride.walks == 1) "walk" else "walks"})"
+                        else -> "Your stride is estimated from your height until you calibrate."
                     },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -338,46 +416,35 @@ fun CalibrateScreen(
             }
         }
 
-        Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
-            if (walking) {
-                OutlinedButton(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    interactionSource = buttonSource,
-                    onClick = {
-                        walking = false
-                        val steps = currentSteps() - startSteps
-                        liveSteps = steps
-                        when (val result = strideFromWalk(distanceM, steps)) {
-                            is StrideResult.Success -> {
-                                saveStride(result.strideCm)
-                                message = "Stride saved: ${"%.1f".format(result.strideCm)} cm"
-                            }
-                            is StrideResult.Rejected -> message = "Not saved: ${result.reason}"
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 56.dp)
-                        .pressScale(buttonSource),
-                ) {
-                    Text("Stop")
-                }
-            } else {
-                Button(
-                    shape = MaterialTheme.shapes.extraLarge,
-                    interactionSource = buttonSource,
-                    onClick = {
-                        message = null
-                        gpsPaused = false
-                        requestNotifications()
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(min = 56.dp)
-                        .pressScale(buttonSource),
-                ) {
-                    Text("Start")
-                }
+        // Start and Stop are outside the entrance animation, so the button is full size and
+        // visible from the first frame.
+        if (walking) {
+            FilledTonalButton(
+                shape = MaterialTheme.shapes.extraLarge,
+                interactionSource = buttonSource,
+                onClick = { finishWalk() },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .pressScale(buttonSource),
+            ) {
+                Text("Stop")
+            }
+        } else {
+            Button(
+                shape = MaterialTheme.shapes.extraLarge,
+                interactionSource = buttonSource,
+                onClick = {
+                    message = null
+                    gpsPaused = false
+                    requestNotifications()
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 56.dp)
+                    .pressScale(buttonSource),
+            ) {
+                Text("Start")
             }
         }
 
@@ -479,9 +546,22 @@ private fun startSettingsIntent(context: Context, intent: Intent) {
     }
 }
 
+/** Turns counting off again when this screen turned it on. */
+private fun stopCountingIfStarted(context: Context, counting: CountingHolder) {
+    if (counting.startedHere) {
+        counting.startedHere = false
+        setCountingOn(context, false)
+    }
+}
+
 /** Holds the distance tracker for the current walk; a new one is created per walk. */
 private class WalkHolder {
     var distance = GpsDistance()
+}
+
+/** True when this screen turned step counting on and must turn it off again. */
+private class CountingHolder {
+    var startedHere = false
 }
 
 /** Only called after location permission has been granted. */
