@@ -313,20 +313,14 @@ fun CalibrateScreen(
         onDispose { context.unregisterReceiver(receiver) }
     }
 
-    // Pauses the walk when GPS turns off and resumes it when GPS comes back.
+    // GPS going off only pauses the distance. Steps keep counting: they never depend on GPS.
     LaunchedEffect(gpsEvents) {
         if (gpsEvents == 0) return@LaunchedEffect
         val enabled = isGpsEnabled(locationManager)
         if (walking && !enabled) {
-            lastSteps = shownSteps
-            baseline = null
-            message = null
-            walking = false
             gpsPaused = true
         } else if (gpsPaused && enabled) {
             gpsPaused = false
-            baseline = LiveSteps.steps.value - lastSteps
-            walking = true
         } else if (pendingStart && enabled) {
             tryStart()
         }
@@ -389,7 +383,7 @@ fun CalibrateScreen(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         Text(
-                            "GPS is off. Turn location back on to keep measuring.",
+                            "GPS is off. Steps still count, but distance is paused until location is back on.",
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.error,
                         )
