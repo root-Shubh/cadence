@@ -23,17 +23,12 @@ import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -50,13 +45,6 @@ import com.cadence.domain.DailyRecord
 import com.cadence.domain.DayMetrics
 import java.time.LocalDate
 import java.util.Locale
-
-/** Period shown by the Today progress card. */
-enum class ProgressPeriod(val label: String) {
-    DAY("Day"),
-    WEEK("Week"),
-    MONTH("Month"),
-}
 
 @Composable
 fun TodayScreen(
@@ -103,13 +91,9 @@ fun TodayScreen(
             }
 
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
-                ProgressCard(
+                DailyGoalLine(
                     steps = steps ?: 0,
                     dailyGoal = dailyGoal,
-                    weeklyGoal = weeklyGoal,
-                    monthlyGoal = monthlyGoal,
-                    history = history,
-                    endDate = endDate,
                 )
             }
 
@@ -221,65 +205,36 @@ fun TodayScreen(
     }
 }
 
-/** Day, Week or Month progress: a segmented choice and a bar with "N of M steps" or "Set a goal". */
+/**
+ * One compact line for the daily goal: a bar and "N of M steps today". Without a daily goal it
+ * points to Profile instead. Weekly and monthly goals are shown on Profile only.
+ */
 @Composable
-private fun ProgressCard(
-    steps: Int,
-    dailyGoal: Int?,
-    weeklyGoal: Int?,
-    monthlyGoal: Int?,
-    history: List<DailyRecord>,
-    endDate: LocalDate,
-) {
-    var period by remember { mutableStateOf(ProgressPeriod.DAY) }
-
-    val (total, goal) = when (period) {
-        ProgressPeriod.DAY -> steps to dailyGoal
-        ProgressPeriod.WEEK -> windowStepTotal(history, endDate, WEEK_WINDOW_DAYS) to weeklyGoal
-        ProgressPeriod.MONTH -> monthStepTotal(history, endDate) to monthlyGoal
-    }
-    val validGoal = goal?.takeIf { it > 0 }
-    val summary = if (validGoal != null) {
-        progressLabel(total, validGoal)
-    } else {
-        "Set a goal"
-    }
-
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                ProgressPeriod.entries.forEach { option ->
-                    FilterChip(
-                        selected = option == period,
-                        onClick = { period = option },
-                        label = { Text(option.label) },
-                        modifier = Modifier.heightIn(min = 48.dp),
-                    )
-                }
-            }
-            if (validGoal != null) {
-                LinearProgressIndicator(
-                    progress = { progressFraction(total, validGoal) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .semantics(mergeDescendants = true) {
-                            contentDescription = "${period.label} progress: $summary"
-                        },
-                    color = MaterialTheme.colorScheme.primary,
-                    trackColor = MaterialTheme.colorScheme.surfaceVariant,
-                )
-            }
+private fun DailyGoalLine(steps: Int, dailyGoal: Int?, modifier: Modifier = Modifier) {
+    val validGoal = dailyGoal?.takeIf { it > 0 }
+    Column(
+        modifier = modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        if (validGoal != null) {
+            val summary = "${formatCount(steps.toLong())} of ${formatCount(validGoal.toLong())} steps today"
+            LinearProgressIndicator(
+                progress = { progressFraction(steps, validGoal) },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .semantics(mergeDescendants = true) { contentDescription = summary },
+                color = MaterialTheme.colorScheme.primary,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+            )
             Text(
                 text = summary,
                 style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        } else {
+            Text(
+                text = "Set a daily goal in Profile",
+                style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
