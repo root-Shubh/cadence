@@ -33,6 +33,20 @@ class ThemeContrastTest {
     }
 
     @Test
+    fun privacyNoticeTextMeetsAaInBothThemes() {
+        // PrivacyNotice uses surfaceVariant with onSurface text.
+        assertTrue(contrastRatio(LightPalette.onSurface, LightPalette.surfaceVariant) >= 4.5)
+        assertTrue(contrastRatio(DarkPalette.onSurface, DarkPalette.surfaceVariant) >= 4.5)
+    }
+
+    @Test
+    fun cardLabelMeetsAaOnSurfaceInBothThemes() {
+        // Calibrate stat cards: onSurfaceVariant label on the default card surface.
+        assertTrue(contrastRatio(LightPalette.onSurfaceVariant, LightPalette.surface) >= 4.5)
+        assertTrue(contrastRatio(DarkPalette.onSurfaceVariant, DarkPalette.surface) >= 4.5)
+    }
+
+    @Test
     fun accentTextMeetsAaOnBackground() {
         assertTrue(contrastRatio(LightPalette.primary, LightPalette.background) >= 4.5)
         assertTrue(contrastRatio(LightPalette.secondary, LightPalette.surface) >= 4.5)
