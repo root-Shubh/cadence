@@ -89,4 +89,35 @@ class StepDetectorTest {
         }
         assertEquals(2, steps)
     }
+
+    /**
+     * (f) Synthetic walk at 2 Hz (2 steps per second): a short acceleration bump at each foot
+     * strike. Over 30 s the count must be within 10% of 60, and each step must be reported
+     * within 500 ms of its foot strike (the detector fires on the rising edge, a little before
+     * the peak, so the check allows for lead as well as lag).
+     */
+    @Test
+    fun twoHertzWalkCountsWithinTenPercentAndWithinHalfSecond() {
+        val strikesMs = (0 until 60).map { 250L + it * 500L }
+        val bumpHalfWidthMs = 150.0
+        val (steps, times) = run(count = 30 * 50) { tSeconds ->
+            val ms = tSeconds * 1000.0
+            val bump = strikesMs.maxOf { strike ->
+                val d = ms - strike
+                if (kotlin.math.abs(d) < bumpHalfWidthMs) {
+                    val c = kotlin.math.cos(PI * d / (2 * bumpHalfWidthMs))
+                    c * c
+                } else {
+                    0.0
+                }
+            }
+            (gravity + 4.0 * bump).toFloat()
+        }
+        assertTrue("expected 54 to 66 steps but was $steps", steps in 54..66)
+        for (t in times) {
+            val nearest = strikesMs.minBy { kotlin.math.abs(it - t) }
+            val lag = t - nearest
+            assertTrue("step at $t ms is $lag ms from its foot strike", kotlin.math.abs(lag) <= 500)
+        }
+    }
 }
