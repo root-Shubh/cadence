@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "com.stepwise"
+    namespace = "com.cadence"
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.stepwise"
+        applicationId = "com.cadence"
         minSdk = 26
         targetSdk = 34
         versionCode = 1

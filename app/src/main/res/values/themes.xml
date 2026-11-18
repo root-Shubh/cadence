@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- Shown while the Activity starts. MainActivity switches to Theme.Stepwise after super.onCreate. -->
+    <style name="Theme.Stepwise.Starting" parent="android:Theme.Material.Light.NoActionBar" tools:targetApi="31">
+        <!-- API 26-30: the mark centred on the splash colour, drawn as the window background. -->
+        <item name="android:windowBackground">@drawable/ic_splash_layers</item>
+        <!-- API 31+: platform splash screen. Unknown attributes are ignored on older releases. -->
+        <item name="android:windowSplashScreenBackground">@color/splash_background</item>
+        <item name="android:windowSplashScreenAnimatedIcon">@drawable/ic_splash_mark</item>
+        <item name="android:windowSplashScreenAnimationDuration">600</item>
+    </style>
+
+    <style name="Theme.Stepwise" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/app_background</item>
+    </style>
+
+</resources>
