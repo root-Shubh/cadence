@@ -36,6 +36,7 @@ fun TodayScreen(
     onStartTracking: () -> Unit,
     modifier: Modifier = Modifier,
     sensorMissing: Boolean = false,
+    countingStatusText: String? = null,
 ) {
     val startSource = remember { MutableInteractionSource() }
 
@@ -63,7 +64,17 @@ fun TodayScreen(
         }
 
         Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
-            HeroStepCard(steps = day?.steps)
+            Column {
+                HeroStepCard(steps = day?.steps)
+                countingStatusText?.let {
+                    Text(
+                        text = it,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp, start = 4.dp),
+                    )
+                }
+            }
         }
 
         Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {

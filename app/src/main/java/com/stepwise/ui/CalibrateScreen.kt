@@ -2,11 +2,15 @@ package com.stepwise.ui
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.content.ActivityNotFoundException
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
+import android.net.Uri
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -19,17 +23,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
 import androidx.compose.material.icons.filled.Route
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableDoubleStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,8 +43,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.stepwise.gps.GpsDistance
 import com.stepwise.gps.GpsFix
 import com.stepwise.gps.StrideResult
@@ -55,6 +64,7 @@ fun CalibrateScreen(
     val locationManager = remember {
         context.getSystemService(Context.LOCATION_SERVICE) as LocationManager
     }
+    val lifecycleOwner = LocalLifecycleOwner.current
     val walk = remember { WalkHolder() }
     val buttonSource = remember { MutableInteractionSource() }
 
@@ -64,6 +74,11 @@ fun CalibrateScreen(
     var startSteps by remember { mutableIntStateOf(0) }
     var liveSteps by remember { mutableIntStateOf(0) }
     var message by remember { mutableStateOf<String?>(null) }
+    // True when the user asked to start and the walk waits for permission and GPS.
+    var pendingStart by remember { mutableStateOf(false) }
+    var showGpsDialog by remember { mutableStateOf(false) }
+    // Bumped on every ON_RESUME (for example, back from location settings) to re-check GPS.
+    var resumeCount by remember { mutableIntStateOf(0) }
 
     val listener = remember {
         object : LocationListener {
@@ -102,8 +117,22 @@ fun CalibrateScreen(
     ) { results ->
         val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
             results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        if (granted) {
-            permissionDenied = false
+        permissionDenied = !granted
+        pendingStart = granted
+    }
+
+    // The single place that decides whether a requested walk can start: it needs
+    // location permission and GPS. Runs when a start is requested and on every resume.
+    LaunchedEffect(pendingStart, resumeCount) {
+        if (!pendingStart) return@LaunchedEffect
+        if (!hasLocationPermission(context)) {
+            pendingStart = false
+            permissionDenied = true
+            return@LaunchedEffect
+        }
+        if (isGpsEnabled(locationManager)) {
+            pendingStart = false
+            showGpsDialog = false
             walk.distance = GpsDistance()
             distanceM = 0.0
             startSteps = currentSteps()
@@ -111,8 +140,17 @@ fun CalibrateScreen(
             message = null
             walking = true
         } else {
-            permissionDenied = true
+            showGpsDialog = true
         }
+    }
+
+    // Re-check GPS when the user returns to this screen.
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) resumeCount++
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     Column(
@@ -134,11 +172,19 @@ fun CalibrateScreen(
 
         if (permissionDenied) {
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
-                Text(
-                    "Location permission was denied. Allow location for Stepwise in system settings to calibrate.",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.error,
-                )
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        "Location permission was denied. Allow location for Stepwise in system settings to calibrate.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.error,
+                    )
+                    OutlinedButton(
+                        shape = MaterialTheme.shapes.extraLarge,
+                        onClick = { startSettingsIntent(context, appSettingsIntent(context)) },
+                    ) {
+                        Text("Open app settings")
+                    }
+                }
             }
         }
 
@@ -213,11 +259,8 @@ fun CalibrateScreen(
                     onClick = {
                         message = null
                         if (hasLocationPermission(context)) {
-                            walk.distance = GpsDistance()
-                            distanceM = 0.0
-                            startSteps = currentSteps()
-                            liveSteps = 0
-                            walking = true
+                            permissionDenied = false
+                            pendingStart = true
                         } else {
                             permissionLauncher.launch(
                                 arrayOf(
@@ -249,6 +292,41 @@ fun CalibrateScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
         }
+    }
+
+    if (showGpsDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showGpsDialog = false
+                pendingStart = false
+            },
+            title = { Text("Turn on location") },
+            text = {
+                Text(
+                    "This walk needs GPS to measure distance. Turn on location, then come back here " +
+                        "and the walk will start.",
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        startSettingsIntent(context, Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
+                    },
+                ) {
+                    Text("Open location settings")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showGpsDialog = false
+                        pendingStart = false
+                    },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
     }
 }
 
@@ -284,6 +362,20 @@ private fun hasLocationPermission(context: Context): Boolean =
         PackageManager.PERMISSION_GRANTED ||
         ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) ==
         PackageManager.PERMISSION_GRANTED
+
+private fun isGpsEnabled(locationManager: LocationManager): Boolean =
+    locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
+
+private fun appSettingsIntent(context: Context): Intent =
+    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.fromParts("package", context.packageName, null))
+
+private fun startSettingsIntent(context: Context, intent: Intent) {
+    try {
+        context.startActivity(intent)
+    } catch (e: ActivityNotFoundException) {
+        // No such settings screen on this device; the dialog or message stays on screen.
+    }
+}
 
 /** Holds the distance tracker for the current walk; a new one is created per walk. */
 private class WalkHolder {

@@ -43,7 +43,11 @@ import com.stepwise.export.CsvExporter
 import com.stepwise.export.buildDailyCsv
 import com.stepwise.export.csvFileName
 import com.stepwise.steps.StepCounterService
+import com.stepwise.steps.StepSensorState
 import com.stepwise.steps.StepTrackingSource
+import com.stepwise.steps.countingStatus
+import com.stepwise.steps.describeCountingStatus
+import com.stepwise.steps.stepSensorState
 import com.stepwise.steps.stepTrackingSource
 import com.stepwise.data.GoalsStore
 import com.stepwise.goals.StepPoint
@@ -57,6 +61,7 @@ import com.stepwise.ui.ProfileScreen
 import com.stepwise.ui.StepwiseTheme
 import com.stepwise.ui.TodayScreen
 import com.stepwise.ui.TrendScreen
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
@@ -116,6 +121,12 @@ class MainActivity : ComponentActivity() {
                         .collect { rows -> value = rows.firstOrNull() }
                 }
                 val todaySteps = todayRow?.steps ?: 0
+                val countingStatusText by produceState<String?>(initialValue = null, trackingActive) {
+                    while (true) {
+                        value = currentCountingStatusText()
+                        delay(5_000L)
+                    }
+                }
 
                 // Last 60 days of stored rows: covers the 30-day window and the one before it.
                 val history by produceState<List<DailyRecord>>(initialValue = emptyList(), today, activeId) {
@@ -166,6 +177,7 @@ class MainActivity : ComponentActivity() {
                                     },
                                     modifier = Modifier.weight(1f),
                                     sensorMissing = sensorMissing,
+                                    countingStatusText = countingStatusText,
                                 )
                             }
                         }
@@ -258,6 +270,23 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** Reads the tracker prefs written by [StepCounterService] and describes counting. */
+    private fun currentCountingStatusText(): String {
+        val prefs = getSharedPreferences(StepCounterService.PREFS_NAME, MODE_PRIVATE)
+        val lastEvent = if (prefs.contains(StepCounterService.KEY_LAST_EVENT_MILLIS)) {
+            prefs.getLong(StepCounterService.KEY_LAST_EVENT_MILLIS, 0L)
+        } else {
+            null
+        }
+        val status = countingStatus(
+            hasPermission = hasActivityRecognition(),
+            hasSensor = stepSensorState(this) is StepSensorState.Available,
+            lastEventMillis = lastEvent,
+            nowMillis = System.currentTimeMillis(),
+        )
+        return describeCountingStatus(status)
     }
 
     private fun hasActivityRecognition(): Boolean =
