@@ -22,6 +22,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.stepwise.data.DEFAULT_PROFILE_ID
 import com.stepwise.data.DataReset
 import com.stepwise.data.PrivacyPrefs
 import com.stepwise.data.ProfileState
@@ -95,14 +96,15 @@ class MainActivity : ComponentActivity() {
 
                 // Live row for today, updated by Room whenever the step service writes.
                 val todayRow by produceState<StepDayEntity?>(initialValue = null, today) {
-                    dao.getRangeFlow(today, today).collect { rows -> value = rows.firstOrNull() }
+                    dao.getRangeFlow(profileStore.activeProfileId() ?: DEFAULT_PROFILE_ID, today, today)
+                        .collect { rows -> value = rows.firstOrNull() }
                 }
                 val todaySteps = todayRow?.steps ?: 0
 
                 // Last 60 days of stored rows: covers the 30-day window and the one before it.
                 val history by produceState<List<DailyRecord>>(initialValue = emptyList(), today) {
                     val from = LocalDate.now().minusDays(HISTORY_DAYS).toString()
-                    dao.getRangeFlow(from, today).collect { rows ->
+                    dao.getRangeFlow(profileStore.activeProfileId() ?: DEFAULT_PROFILE_ID, from, today).collect { rows ->
                         value = rows.map { DailyRecord(it.dateIso, it.steps, it.totalKcal) }
                     }
                 }
@@ -173,7 +175,11 @@ class MainActivity : ComponentActivity() {
                             },
                             onExportCsv = {
                                 scope.launch {
-                                    val rows = dao.getRange("0000-01-01", today)
+                                    val rows = dao.getRange(
+                                        profileStore.activeProfileId() ?: DEFAULT_PROFILE_ID,
+                                        "0000-01-01",
+                                        today,
+                                    )
                                     val csv = buildDailyCsv(rows.toCsvRows())
                                     startActivity(CsvExporter.export(applicationContext, csv, csvFileName(today)))
                                 }

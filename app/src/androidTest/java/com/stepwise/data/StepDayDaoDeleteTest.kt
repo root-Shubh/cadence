@@ -26,7 +26,7 @@ class StepDayDaoDeleteTest {
         db.close()
     }
 
-    private fun day(iso: String, steps: Int) = StepDayEntity(
+    private fun day(iso: String, steps: Int, profileId: String = DEFAULT_PROFILE_ID) = StepDayEntity(
         dateIso = iso,
         steps = steps,
         distanceM = steps * 0.7,
@@ -34,15 +34,29 @@ class StepDayDaoDeleteTest {
         bmrKcal = 1500.0,
         rmrKcal = 1400.0,
         totalKcal = 1510.0,
+        profileId = profileId,
     )
 
     @Test
-    fun deleteAllRemovesEveryRow() = runBlocking {
+    fun deleteAllRemovesOnlyThatProfilesRows() = runBlocking {
         dao.upsert(day("2026-03-01", 1000))
         dao.upsert(day("2026-03-02", 2000))
+        dao.upsert(day("2026-03-01", 3000, profileId = "other"))
 
-        dao.deleteAll()
+        dao.deleteAll(DEFAULT_PROFILE_ID)
 
-        assertTrue(dao.getRange("2026-03-01", "2026-03-31").isEmpty())
+        assertTrue(dao.getRange(DEFAULT_PROFILE_ID, "2026-03-01", "2026-03-31").isEmpty())
+        assertTrue(dao.getRange("other", "2026-03-01", "2026-03-31").size == 1)
+    }
+
+    @Test
+    fun deleteAllForAllProfilesRemovesEveryRow() = runBlocking {
+        dao.upsert(day("2026-03-01", 1000))
+        dao.upsert(day("2026-03-01", 3000, profileId = "other"))
+
+        dao.deleteAllForAllProfiles()
+
+        assertTrue(dao.getRange("other", "2026-03-01", "2026-03-31").isEmpty())
+        assertTrue(dao.getRange(DEFAULT_PROFILE_ID, "2026-03-01", "2026-03-31").isEmpty())
     }
 }

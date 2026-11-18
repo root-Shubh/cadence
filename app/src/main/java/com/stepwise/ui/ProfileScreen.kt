@@ -110,13 +110,22 @@ fun ProfileScreen(
     onDeleteProfile: () -> Unit = {},
     onDeleteAllData: () -> Unit = {},
     onExportCsv: () -> Unit = {},
+    profiles: List<ProfileState> = emptyList(),
+    activeId: String? = null,
+    onSelectProfile: (String) -> Unit = {},
+    onAddProfile: (String) -> Unit = {},
+    onRenameProfile: (String, String) -> Unit = { _, _ -> },
+    onDeleteActiveProfile: () -> Unit = {},
 ) {
-    var height by remember { mutableStateOf(formatMeasure(initial?.heightCm)) }
-    var weight by remember { mutableStateOf(formatMeasure(initial?.weightKg)) }
-    var age by remember { mutableStateOf(initial?.age?.toString() ?: "") }
-    var sex by remember { mutableStateOf(initial?.sex ?: "") }
-    var stride by remember { mutableStateOf(formatMeasure(initial?.strideOverrideCm)) }
-    var errors by remember { mutableStateOf<List<String>>(emptyList()) }
+    // The form reloads whenever the active profile changes. A new profile has zero values,
+    // which show as blank fields.
+    val formKey = activeId ?: initial?.id
+    var height by remember(formKey) { mutableStateOf(formatMeasure(initial?.heightCm?.takeIf { it > 0.0 })) }
+    var weight by remember(formKey) { mutableStateOf(formatMeasure(initial?.weightKg?.takeIf { it > 0.0 })) }
+    var age by remember(formKey) { mutableStateOf(initial?.age?.takeIf { it > 0 }?.toString() ?: "") }
+    var sex by remember(formKey) { mutableStateOf(initial?.sex ?: "") }
+    var stride by remember(formKey) { mutableStateOf(formatMeasure(initial?.strideOverrideCm)) }
+    var errors by remember(formKey) { mutableStateOf<List<String>>(emptyList()) }
     var confirmDeleteProfile by remember { mutableStateOf(false) }
     var confirmDeleteData by remember { mutableStateOf(false) }
     var saveCount by remember { mutableIntStateOf(0) }
@@ -160,6 +169,18 @@ fun ProfileScreen(
 
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
                 Text("Profile", style = MaterialTheme.typography.headlineSmall)
+            }
+
+            Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                ProfilePicker(
+                    profiles = profiles,
+                    activeId = activeId,
+                    onSelect = onSelectProfile,
+                    onAdd = onAddProfile,
+                    onRename = onRenameProfile,
+                    onDeleteActive = onDeleteActiveProfile,
+                    modifier = Modifier.fillMaxWidth(),
+                )
             }
 
             Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
