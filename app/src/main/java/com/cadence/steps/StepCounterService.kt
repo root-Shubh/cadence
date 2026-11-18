@@ -144,6 +144,9 @@ class StepCounterService : Service(), SensorEventListener {
     /** Newest hardware reading. Deltas are taken against it. */
     private var sensorRaw: Long? = null
 
+    /** When the hardware counter last reported, or counting started. Read under [countLock]. */
+    private var lastCounterMillis = 0L
+
     @Volatile private var started = false
     @Volatile private var destroyed = false
 
@@ -283,6 +286,7 @@ class StepCounterService : Service(), SensorEventListener {
             sensorRaw = raw
             // The counter has reported, so the accelerometer lead is matched up to here.
             accelUnmatched = 0L
+            lastCounterMillis = now
             liveLocked()
         }
         LiveSteps.reset(live)
@@ -356,6 +360,7 @@ class StepCounterService : Service(), SensorEventListener {
                     counterSteps = 0L
                     accelUnmatched = 0L
                     counterActive = plan == ServicePlan.COUNT
+                    lastCounterMillis = System.currentTimeMillis()
                     sensorRaw = readStoredRaw()
                     liveLocked()
                 }
@@ -466,8 +471,15 @@ class StepCounterService : Service(), SensorEventListener {
      * Today's displayed total: the counter based total plus the capped accelerometer lead.
      * Call under [countLock].
      */
-    private fun liveLocked(): Int =
-        displayTotal(counterTotalLocked(), accelUnmatched.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
+    private fun liveLocked(): Int {
+        val now = System.currentTimeMillis()
+        val cap = accelLeadCap(now, lastCounterMillis, StepDetector.MAX_STEPS_PER_SECOND)
+        return displayTotal(
+            counterTotalLocked(),
+            accelUnmatched.coerceAtMost(Int.MAX_VALUE.toLong()).toInt(),
+            cap,
+        )
+    }
 
     /** Counter based total: the stored base, less its excess, plus hardware steps. */
     private fun counterTotalLocked(): Int = clampToInt(storedBase - excessBase + counterSteps)

@@ -30,3 +30,23 @@ fun displayTotal(counterTotal: Int, accelSteps: Int, cap: Int = ACCEL_LEAD_CAP):
  * out-of-order write cannot lower the stored steps.
  */
 fun mergeStored(previousStored: Int, candidate: Int): Int = max(previousStored, candidate)
+
+/** Most the accelerometer lead may ever be, however long the hardware counter stays silent. */
+const val ACCEL_LEAD_CAP_MAX = 120
+
+/**
+ * The lead cap for the current moment. The hardware counter can stay silent for many seconds
+ * while the user walks, so a fixed cap of [ACCEL_LEAD_CAP] freezes the display after a few steps.
+ * The cap grows with the silence: [ACCEL_LEAD_CAP] plus [maxStepsPerSecond] for each second since
+ * the counter last reported, up to [ACCEL_LEAD_CAP_MAX]. A shake still cannot count faster than the
+ * detector's step rate. Pure Kotlin, no Android dependencies.
+ */
+fun accelLeadCap(
+    nowMillis: Long,
+    lastCounterMillis: Long,
+    maxStepsPerSecond: Double,
+): Int {
+    val silentSeconds = max(0L, nowMillis - lastCounterMillis) / 1000.0
+    val grown = ACCEL_LEAD_CAP + kotlin.math.ceil(silentSeconds * maxStepsPerSecond).toInt()
+    return min(grown, ACCEL_LEAD_CAP_MAX)
+}

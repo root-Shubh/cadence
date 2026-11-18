@@ -163,4 +163,34 @@ class StepDetectorTest {
             assertTrue("step at $t ms is $lag ms from its foot strike", abs(lag) <= 500)
         }
     }
+
+    /** Warm-up: a 1.8 Hz walk starting at t=0 has its first 3 steps within the first 3 seconds. */
+    @Test
+    fun warmUpCountsFirstThreeStepsWithinThreeSeconds() {
+        val (_, times) = run(count = 200, valueAt = sineWalk(1.8, 3.0, noise = 0.05))
+        val early = times.filter { it < 3000L }
+        assertTrue("steps were $times, expected 3 within 3 s", early.size >= 3)
+    }
+
+    /** Steady 2 Hz walk after warm-up: no gap between steps longer than two step intervals (1 s). */
+    @Test
+    fun steadyTwoHzWalkHasNoGapLongerThanTwoIntervals() {
+        val (_, times) = run(count = 30 * 50, valueAt = sineWalk(2.0, 3.0, noise = 0.1))
+        val afterWarmUp = times.filter { it >= 3000L }
+        assertTrue("expected steps after warm-up", afterWarmUp.size >= 2)
+        for (i in 1 until afterWarmUp.size) {
+            val gap = afterWarmUp[i] - afterWarmUp[i - 1]
+            assertTrue("gap of $gap ms between ${afterWarmUp[i - 1]} and ${afterWarmUp[i]} ms", gap <= 1000L)
+        }
+    }
+
+    /** A 2 s shake followed by a 2 Hz walk: steps count again within 3 s of the shake ending. */
+    @Test
+    fun recoversAfterShakeBurst() {
+        val shake = sineWalk(8.0, 5.0)
+        val walk = sineWalk(2.0, 3.0, noise = 0.1)
+        val (_, times) = run(count = 10 * 50) { t -> if (t < 2.0) shake(t) else walk(t - 2.0) }
+        val recovered = times.filter { it >= 2000L && it < 5000L }
+        assertTrue("steps were $times, expected at least 3 within 3 s after the shake", recovered.size >= 3)
+    }
 }
