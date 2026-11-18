@@ -3,7 +3,7 @@ package com.cadence.widget
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import com.cadence.steps.isCountingOn
+import com.cadence.steps.isCountingRunning
 import com.cadence.steps.setCountingOn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -23,7 +23,7 @@ class StepControlReceiver : BroadcastReceiver() {
         CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
             try {
                 if (canToggleCounting(appContext)) {
-                    setCountingOn(appContext, !isCountingOn(appContext))
+                    setCountingOn(appContext, !isCountingRunning())
                 } else {
                     // Permission or step source is missing: open the app so it can show the prompt.
                     openAppPendingIntent(appContext, REQUEST_OPEN_APP, null).send()

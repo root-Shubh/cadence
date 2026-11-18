@@ -10,7 +10,7 @@ import com.cadence.data.StepDatabase
 import com.cadence.goals.effectiveGoals
 import com.cadence.steps.StepTrackingSource
 import com.cadence.steps.hasActivityRecognition
-import com.cadence.steps.isCountingOn
+import com.cadence.steps.isCountingRunning
 import com.cadence.steps.stepTrackingSource
 import java.time.LocalDate
 import java.time.ZoneId
@@ -72,7 +72,7 @@ suspend fun refreshStartStopWidgets(context: Context, ids: IntArray? = null) {
     val views = StartStopWidgetProvider.buildViews(
         context = context,
         steps = steps,
-        counting = isCountingOn(context),
+        counting = isCountingRunning(),
         canToggle = canToggleCounting(context),
     )
     for (id in target) manager.updateAppWidget(id, views)

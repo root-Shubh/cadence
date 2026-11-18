@@ -71,7 +71,7 @@ import com.cadence.steps.LiveSteps
 import com.cadence.steps.StepTrackingSource
 import com.cadence.steps.StrideStore
 import com.cadence.steps.hasActivityRecognition
-import com.cadence.steps.isCountingOn
+import com.cadence.steps.isCountingRunning
 import com.cadence.steps.setCountingOn
 import com.cadence.steps.stepTrackingSource
 
@@ -255,7 +255,7 @@ fun CalibrateScreen(
         }
         // Calibration counts steps itself: turn counting on when it is not already running.
         if (!LiveSteps.tracking.value) {
-            counting.startedHere = !isCountingOn(context)
+            counting.startedHere = !isCountingRunning()
             setCountingOn(context, true)
         }
         walk.distance = GpsDistance()

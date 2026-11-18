@@ -7,6 +7,12 @@ fun isCountingOn(context: Context): Boolean =
     context.getSharedPreferences(StepCounterService.PREFS_NAME, Context.MODE_PRIVATE)
         .getBoolean(StepCounterService.KEY_COUNTING_ON, false)
 
+/**
+ * True while the step service is really counting. Use this, not the saved flag, to decide what a
+ * Start or Stop press does: the flag can outlive the service.
+ */
+fun isCountingRunning(): Boolean = LiveSteps.tracking.value
+
 /** Turns counting on (saves the flag and starts the service) or off (saves the flag and stops it). */
 fun setCountingOn(context: Context, on: Boolean) {
     val app = context.applicationContext
