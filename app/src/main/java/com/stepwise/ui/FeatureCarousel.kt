@@ -68,7 +68,7 @@ fun FeatureCarousel(modifier: Modifier = Modifier) {
     Column(modifier = modifier.fillMaxWidth()) {
         LazyRow(
             state = listState,
-            modifier = Modifier.fillMaxWidth().height(340.dp),
+            modifier = Modifier.fillMaxWidth().height(420.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             flingBehavior = rememberSnapFlingBehavior(listState),
         ) {
@@ -101,7 +101,7 @@ fun FeatureCarousel(modifier: Modifier = Modifier) {
 @Composable
 private fun FeatureCard(feature: WelcomeFeature, modifier: Modifier = Modifier) {
     Card(
-        modifier = modifier.fillMaxWidth().height(340.dp),
+        modifier = modifier.fillMaxWidth().height(420.dp),
         shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
     ) {
