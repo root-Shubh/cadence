@@ -80,6 +80,8 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         // Leave the splash theme for the normal app theme once the Activity is up.
         setTheme(R.style.Theme_Stepwise)
+        // The launch theme sets the splash mark as the window background; replace it so it never shows behind the content.
+        window.setBackgroundDrawable(android.graphics.drawable.ColorDrawable(getColor(R.color.app_background)))
         val profileStore = ProfileStore(applicationContext)
         val database = StepDatabase.getInstance(applicationContext)
         val dao = database.stepDayDao()
