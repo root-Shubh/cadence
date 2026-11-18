@@ -9,14 +9,20 @@ class CalibrateAutoStopTest {
 
     @Test
     fun doesNotStopBelowFiftySteps() {
-        assertFalse(shouldAutoStop(0))
-        assertFalse(shouldAutoStop(49))
+        assertFalse(shouldAutoStop(0, 100.0))
+        assertFalse(shouldAutoStop(49, 100.0))
     }
 
     @Test
-    fun stopsAtFiftySteps() {
-        assertTrue(shouldAutoStop(50))
-        assertTrue(shouldAutoStop(51))
+    fun keepsWalkingUntilFiftyMetresEvenAtFiftySteps() {
+        assertFalse(shouldAutoStop(50, 35.0))
+        assertFalse(shouldAutoStop(60, 49.9))
+    }
+
+    @Test
+    fun stopsWhenBothStepsAndDistanceReached() {
+        assertTrue(shouldAutoStop(50, 50.0))
+        assertTrue(shouldAutoStop(51, 60.0))
     }
 
     @Test
@@ -26,7 +32,7 @@ class CalibrateAutoStopTest {
 
     @Test
     fun customTargetIsUsed() {
-        assertFalse(shouldAutoStop(9, targetSteps = 10))
-        assertTrue(shouldAutoStop(10, targetSteps = 10))
+        assertFalse(shouldAutoStop(9, 100.0, targetSteps = 10))
+        assertTrue(shouldAutoStop(10, 100.0, targetSteps = 10))
     }
 }

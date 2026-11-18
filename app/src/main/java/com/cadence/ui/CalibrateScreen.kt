@@ -74,9 +74,19 @@ import com.cadence.steps.stepTrackingSource
 /** Steps at which a calibration walk stops on its own. */
 const val CALIBRATION_TARGET_STEPS: Int = 50
 
-/** True once a calibration walk has counted [targetSteps] steps, so it should stop on its own. */
-fun shouldAutoStop(steps: Int, targetSteps: Int = CALIBRATION_TARGET_STEPS): Boolean =
-    steps >= targetSteps
+/** Metres a calibration walk must cover before it can stop on its own. */
+const val CALIBRATION_TARGET_METERS: Double = 50.0
+
+/**
+ * True once a calibration walk has both [targetSteps] steps and [targetMeters] metres, so it
+ * stops on its own. The user can still press Stop to end it earlier.
+ */
+fun shouldAutoStop(
+    steps: Int,
+    distanceM: Double,
+    targetSteps: Int = CALIBRATION_TARGET_STEPS,
+    targetMeters: Double = CALIBRATION_TARGET_METERS,
+): Boolean = steps >= targetSteps && distanceM >= targetMeters
 
 /**
  * [saveStride] stores a successful stride and returns false when nothing could be saved.
@@ -176,7 +186,7 @@ fun CalibrateScreen(
 
     // Stops the walk on its own at the target step count. The user can still press Stop earlier.
     LaunchedEffect(walking, shownSteps) {
-        if (walking && shouldAutoStop(shownSteps)) finishWalk()
+        if (walking && shouldAutoStop(shownSteps, distanceM)) finishWalk()
     }
 
     // GPS listener is registered only while walking and removed on Stop or when leaving the screen.
