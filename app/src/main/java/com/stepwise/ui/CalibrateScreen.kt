@@ -12,6 +12,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -127,20 +128,14 @@ fun CalibrateScreen(
             )
         }
 
-        Card(modifier = Modifier.fillMaxWidth()) {
+        StatCard(label = "Distance", value = "${"%.0f".format(distanceM)} m")
+        StatCard(label = "Steps during walk", value = "$liveSteps")
+
+        if (!walking && message == null) {
             Text(
-                "Distance: ${"%.0f".format(distanceM)} m",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.tertiary,
-                modifier = Modifier.padding(16.dp),
-            )
-        }
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Text(
-                "Steps during walk: $liveSteps",
-                style = MaterialTheme.typography.headlineSmall,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(16.dp),
+                "Your stride is estimated from your height until you calibrate.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
 
@@ -150,6 +145,7 @@ fun CalibrateScreen(
                 onClick = {
                     walking = false
                     val steps = currentSteps() - startSteps
+                    liveSteps = steps
                     when (val result = strideFromWalk(distanceM, steps)) {
                         is StrideResult.Success -> {
                             saveStride(result.strideCm)
@@ -158,7 +154,9 @@ fun CalibrateScreen(
                         is StrideResult.Rejected -> message = "Not saved: ${result.reason}"
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
             ) {
                 Text("Stop")
             }
@@ -182,7 +180,9 @@ fun CalibrateScreen(
                         )
                     }
                 },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 48.dp),
             ) {
                 Text("Start")
             }
@@ -194,6 +194,24 @@ fun CalibrateScreen(
             "GPS works offline. No location or step data is sent anywhere.",
             style = MaterialTheme.typography.bodySmall,
         )
+    }
+}
+
+/** Label (bodyMedium, onSurfaceVariant) above a headlineSmall value, inside a card. */
+@Composable
+private fun StatCard(label: String, value: String) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(value, style = MaterialTheme.typography.headlineSmall)
+        }
     }
 }
 
