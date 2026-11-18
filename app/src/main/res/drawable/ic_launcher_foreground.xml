@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Walking figure and progress arc. All artwork sits inside the 66dp adaptive safe-zone circle
+     (radius 156 of 512 units, centred on 256,256). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <path
+        android:pathData="M134.8,186 A140,140 0 0 1 377.2,186"
+        android:strokeColor="@color/brand_mint"
+        android:strokeWidth="16"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M256,146 A24,24 0 1 1 256,194 A24,24 0 1 1 256,146 Z" />
+    <path
+        android:pathData="M256,216 L256,284"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="32"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M256,236 L220,262 M256,236 L296,258"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="22"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M256,284 L232,334 L214,378 M256,284 L284,330 L306,372"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="26"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round" />
+</vector>

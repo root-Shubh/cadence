@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_label">Steps today</string>
+    <string name="widget_description">Today\'s steps and goal</string>
+    <string name="widget_start_stop_description">Start or stop step counting, with today\'s steps</string>
+    <string name="widget_goals_description">Daily, weekly and monthly goal progress</string>
+    <string name="widget_action_start">Start</string>
+    <string name="widget_action_stop">Stop</string>
+    <string name="widget_steps_short">%1$s steps</string>
+    <string name="widget_goals_title">Goals</string>
+    <string name="widget_goals_daily">Daily</string>
+    <string name="widget_goals_weekly">Weekly</string>
+    <string name="widget_goals_monthly">Monthly</string>
+    <string name="widget_goal_percent">%1$d%%</string>
+    <string name="widget_goal_unset_percent">--</string>
+    <string name="widget_goal_unset">No goal set</string>
+</resources>
