@@ -23,6 +23,7 @@ fun TodayScreen(
     trackingActive: Boolean,
     onStartTracking: () -> Unit,
     modifier: Modifier = Modifier,
+    sensorMissing: Boolean = false,
 ) {
     Column(
         modifier = modifier
@@ -34,6 +35,14 @@ fun TodayScreen(
             text = todayStatusText(profileMissing, trackingActive),
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        if (sensorMissing) {
+            Text(
+                text = "This phone has no step counter, so steps cannot be counted.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
 
         Text(
             text = day?.steps?.let { "%,d".format(Locale.US, it) } ?: "-",

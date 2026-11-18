@@ -26,6 +26,8 @@ import com.stepwise.domain.Profile
 import com.stepwise.domain.Sex
 import com.stepwise.domain.computeDay
 import com.stepwise.steps.StepCounterService
+import com.stepwise.steps.StepSensorState
+import com.stepwise.steps.stepSensorState
 import com.stepwise.ui.AppShell
 import com.stepwise.ui.CalibrateScreen
 import com.stepwise.ui.Destination
@@ -46,7 +48,18 @@ class MainActivity : ComponentActivity() {
                 var selected by rememberSaveable { mutableStateOf(Destination.TODAY) }
                 var profileState by remember { mutableStateOf(profileStore.load()) }
                 var trackingActive by rememberSaveable { mutableStateOf(false) }
+                var sensorMissing by rememberSaveable { mutableStateOf(false) }
                 val today = LocalDate.now().toString()
+
+                // Checks for a step counter first, so the service never starts without one (STEPW-23).
+                fun startTracking() {
+                    if (stepSensorState(this@MainActivity) is StepSensorState.NoSensor) {
+                        sensorMissing = true
+                        return
+                    }
+                    StepCounterService.start(applicationContext)
+                    trackingActive = true
+                }
 
                 // Live row for today, updated by Room whenever the step service writes.
                 val todayRow by produceState<StepDayEntity?>(initialValue = null, today) {
@@ -58,10 +71,7 @@ class MainActivity : ComponentActivity() {
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
                 ) { granted ->
-                    if (granted) {
-                        StepCounterService.start(applicationContext)
-                        trackingActive = true
-                    }
+                    if (granted) startTracking()
                 }
 
                 AppShell(selected = selected, onSelect = { selected = it }) { padding ->
@@ -75,16 +85,13 @@ class MainActivity : ComponentActivity() {
                                 trackingActive = trackingActive,
                                 onStartTracking = {
                                     if (hasActivityRecognition()) {
-                                        StepCounterService.start(applicationContext)
-                                        trackingActive = true
-                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                        permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                                        startTracking()
                                     } else {
-                                        StepCounterService.start(applicationContext)
-                                        trackingActive = true
+                                        permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
                                     }
                                 },
                                 modifier = modifier,
+                                sensorMissing = sensorMissing,
                             )
                         }
                         Destination.TREND -> TrendScreen(

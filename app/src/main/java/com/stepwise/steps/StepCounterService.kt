@@ -76,26 +76,30 @@ class StepCounterService : Service(), SensorEventListener {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
-        if (!hasActivityRecognition(this)) {
-            Log.w(TAG, "ACTIVITY_RECOGNITION not granted; stopping")
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        if (stepSensorState(this) is StepSensorState.NoSensor) {
-            prefs().edit().putBoolean(KEY_SENSOR_MISSING, true).apply()
-            stopSelf()
-            return START_NOT_STICKY
-        }
-        prefs().edit().putBoolean(KEY_SENSOR_MISSING, false).apply()
+        val plan = servicePlan(
+            hasPermission = hasActivityRecognition(this),
+            hasSensor = stepSensorState(this) is StepSensorState.Available,
+        )
+        prefs().edit().putBoolean(KEY_SENSOR_MISSING, plan == ServicePlan.NO_SENSOR).apply()
 
+        // Android requires startForeground after startForegroundService, even when the
+        // service is about to stop (STEPW-23). So the notice is posted first, then we stop.
         try {
-            startForegroundCompat(buildNotification(lastSteps))
+            startForegroundCompat(
+                if (plan == ServicePlan.COUNT) buildNotification(lastSteps) else buildNoticeNotification(plan),
+            )
         } catch (e: SecurityException) {
             Log.w(TAG, "Cannot start foreground service; stopping", e)
             stopSelf()
             return START_NOT_STICKY
         } catch (e: IllegalStateException) {
             Log.w(TAG, "Foreground start not allowed; stopping", e)
+            stopSelf()
+            return START_NOT_STICKY
+        }
+
+        if (plan != ServicePlan.COUNT) {
+            Log.w(TAG, "Not counting steps: $plan")
             stopSelf()
             return START_NOT_STICKY
         }
@@ -218,6 +222,23 @@ class StepCounterService : Service(), SensorEventListener {
             .setOnlyAlertOnce(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
             .build()
+
+    /** Shown briefly when counting cannot run; the service then stops. */
+    private fun buildNoticeNotification(plan: ServicePlan): Notification {
+        val text = if (plan == ServicePlan.NO_SENSOR) {
+            "This phone has no step counter"
+        } else {
+            "Activity permission is needed to count steps"
+        }
+        return NotificationCompat.Builder(this, CHANNEL_ID)
+            .setSmallIcon(android.R.drawable.ic_menu_directions)
+            .setContentTitle("Stepwise is not counting")
+            .setContentText(text)
+            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setOngoing(false)
+            .setCategory(NotificationCompat.CATEGORY_SERVICE)
+            .build()
+    }
 
     private fun createChannel() {
         val channel = NotificationChannel(CHANNEL_ID, "Steps", NotificationManager.IMPORTANCE_LOW)
