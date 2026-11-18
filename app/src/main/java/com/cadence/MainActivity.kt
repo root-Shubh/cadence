@@ -201,7 +201,9 @@ class MainActivity : ComponentActivity() {
                     activeId = profileStore.activeProfileId()
                     profileState = profileStore.load()
                 }
-                var trackingActive by rememberSaveable { mutableStateOf(countingResumed) }
+                // Not saved across restarts: the step service decides the real state, and a saved
+                // value could say "recording" while the service is off.
+                var trackingActive by remember { mutableStateOf(countingResumed) }
                 var sensorMissing by rememberSaveable { mutableStateOf(false) }
                 var privacyHidden by rememberSaveable { mutableStateOf(false) }
                 var goals by remember { mutableStateOf(goalsStore.load()) }
@@ -295,7 +297,9 @@ class MainActivity : ComponentActivity() {
                 }
                 // Turns recording off, or on through the same permission and sensor checks as Start.
                 val toggleRecording: () -> Unit = {
-                    if (trackingActive) {
+                    // Recording means the service is really counting. A stale flag must not turn
+                    // the press into a stop, so a press starts counting unless the service is running.
+                    if (trackingActive && LiveSteps.tracking.value) {
                         setCountingOn(applicationContext, false)
                         trackingActive = false
                     } else if (hasActivityRecognition()) {
