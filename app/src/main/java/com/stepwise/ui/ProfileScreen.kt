@@ -40,6 +40,8 @@ import androidx.compose.material.icons.filled.Transgender
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
@@ -54,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -117,6 +120,7 @@ fun ProfileScreen(
     onRenameProfile: (String, String) -> Unit = { _, _ -> },
     onDeleteActiveProfile: () -> Unit = {},
     goalsSection: @Composable () -> Unit = {},
+    showReviewBanner: Boolean = false,
 ) {
     // The form reloads whenever the active profile changes. A new profile has zero values,
     // which show as blank fields.
@@ -131,6 +135,8 @@ fun ProfileScreen(
     var confirmDeleteData by remember { mutableStateOf(false) }
     var saveCount by remember { mutableIntStateOf(0) }
     var savedVisible by remember { mutableStateOf(false) }
+    // Dismissing the review banner lasts for this screen session only.
+    var reviewBannerDismissed by rememberSaveable { mutableStateOf(false) }
 
     val saveSource = remember { MutableInteractionSource() }
     val exportSource = remember { MutableInteractionSource() }
@@ -165,11 +171,13 @@ fun ProfileScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Reveal(index = 0, modifier = Modifier.fillMaxWidth()) {
-                PrivacyNotice()
+                Text("Profile", style = MaterialTheme.typography.headlineSmall)
             }
 
-            Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
-                Text("Profile", style = MaterialTheme.typography.headlineSmall)
+            if (showReviewBanner && !reviewBannerDismissed) {
+                Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                    ReviewBanner(onDismiss = { reviewBannerDismissed = true })
+                }
             }
 
             Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
@@ -182,6 +190,10 @@ fun ProfileScreen(
                     onDeleteActive = onDeleteActiveProfile,
                     modifier = Modifier.fillMaxWidth(),
                 )
+            }
+
+            Reveal(index = 1, modifier = Modifier.fillMaxWidth()) {
+                PrivacyNotice()
             }
 
             Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
@@ -499,6 +511,35 @@ private fun ProfileField(
             .fillMaxWidth()
             .heightIn(min = 56.dp),
     )
+}
+
+/** Prompt to re-check the numbers. The dismiss button keeps 48 dp touch height. */
+@Composable
+private fun ReviewBanner(onDismiss: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 16.dp, bottom = 8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text("Review your details", style = MaterialTheme.typography.titleMedium)
+            Text(
+                "Check your height, weight and age so calorie estimates stay accurate.",
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.align(Alignment.End).heightIn(min = 48.dp),
+            ) {
+                Text("Dismiss")
+            }
+        }
+    }
 }
 
 /** "Saved" confirmation with a checkmark. Space is reserved so the layout does not jump. */

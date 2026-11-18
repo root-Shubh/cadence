@@ -46,6 +46,11 @@ import com.stepwise.steps.StepCounterService
 import com.stepwise.steps.StepTrackingSource
 import com.stepwise.steps.stepTrackingSource
 import com.stepwise.data.GoalsStore
+import com.stepwise.data.OnboardingPrefs
+import com.stepwise.ui.OnboardingFlow
+import com.stepwise.ui.missingProfileFields
+import com.stepwise.ui.shouldShowOnboarding
+import com.stepwise.ui.shouldShowReviewBanner
 import com.stepwise.goals.StepPoint
 import com.stepwise.ui.AppShell
 import com.stepwise.ui.GoalsCard
@@ -72,6 +77,7 @@ class MainActivity : ComponentActivity() {
         val themePrefs = ThemePrefs(applicationContext)
         val privacyPrefs = PrivacyPrefs(applicationContext)
         val goalsStore = GoalsStore(applicationContext)
+        val onboardingPrefs = OnboardingPrefs(applicationContext)
 
         setContent {
             var themeChoice by remember { mutableStateOf(themePrefs.load()) }
@@ -97,6 +103,16 @@ class MainActivity : ComponentActivity() {
                 var sensorMissing by rememberSaveable { mutableStateOf(false) }
                 var privacyHidden by rememberSaveable { mutableStateOf(false) }
                 var goals by remember { mutableStateOf(goalsStore.load()) }
+                // First-launch gate. A user who already has a profile skips the flow and is marked done.
+                var showOnboarding by remember {
+                    mutableStateOf(
+                        run {
+                            val hasProfile = profileStore.load() != null
+                            if (hasProfile) onboardingPrefs.markDone()
+                            shouldShowOnboarding(hasProfile, onboardingPrefs.isDone())
+                        },
+                    )
+                }
                 val today = LocalDate.now().toString()
 
                 // Checks for a step counter or an accelerometer first, so the service never starts
@@ -132,7 +148,19 @@ class MainActivity : ComponentActivity() {
                     if (granted) startTracking()
                 }
 
-                AppShell(selected = selected, onSelect = { selected = it }) { padding ->
+                if (showOnboarding) OnboardingFlow(
+                    onSaveProfile = { state ->
+                        profileStore.save(state)
+                        onboardingPrefs.markProfileSaved(System.currentTimeMillis())
+                        refreshProfiles()
+                    },
+                    onFinish = {
+                        onboardingPrefs.markDone()
+                        refreshProfiles()
+                        showOnboarding = false
+                    },
+                    modifier = Modifier.fillMaxSize(),
+                ) else AppShell(selected = selected, onSelect = { selected = it }) { padding ->
                     val modifier = Modifier.padding(padding)
                     when (selected) {
                         Destination.TODAY -> {
@@ -232,6 +260,11 @@ class MainActivity : ComponentActivity() {
                                     startActivity(CsvExporter.export(applicationContext, csv, csvFileName(today)))
                                 }
                             },
+                            showReviewBanner = shouldShowReviewBanner(
+                                savedAtMillis = onboardingPrefs.profileSavedAt(),
+                                nowMillis = System.currentTimeMillis(),
+                                missingFields = missingProfileFields(profileState),
+                            ),
                             goalsSection = {
                                 GoalsEditor(
                                     current = goals,
