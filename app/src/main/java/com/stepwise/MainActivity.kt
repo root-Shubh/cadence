@@ -39,6 +39,13 @@ import com.stepwise.export.mergeImported
 import com.stepwise.export.parseDailyCsv
 import com.stepwise.goals.effectiveGoals
 import com.stepwise.steps.LiveSteps
+import com.stepwise.steps.appNotificationSettingsIntent
+import com.stepwise.steps.notificationsEnabled
+import com.stepwise.ui.rememberNotificationRequest
+import androidx.compose.runtime.DisposableEffect
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import android.net.Uri
 import android.util.Log
 import androidx.compose.runtime.collectAsState
@@ -145,13 +152,32 @@ class MainActivity : ComponentActivity() {
 
                 // Checks for a step counter or an accelerometer first, so the service never starts
                 // with no way to count (STEPW-23, STEPW-43).
+                // True while notifications are off, so Today can say the tray does not show steps.
+                var notificationsOff by remember { mutableStateOf(!notificationsEnabled(this@MainActivity)) }
+                // Asks for the notification permission (Android 13+) before counting starts. Counting
+                // starts after the answer, granted or denied, so the service still runs without it.
+                val requestNotifications = rememberNotificationRequest {
+                    setCountingOn(applicationContext, true)
+                    trackingActive = true
+                    notificationsOff = !notificationsEnabled(this@MainActivity)
+                }
                 fun startTracking() {
                     if (stepTrackingSource(this@MainActivity) is StepTrackingSource.None) {
                         sensorMissing = true
                         return
                     }
-                    setCountingOn(applicationContext, true)
-                    trackingActive = true
+                    requestNotifications()
+                }
+                val lifecycleOwner = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleOwner) {
+                    // Re-read on return, for example from the notification settings screen.
+                    val observer = LifecycleEventObserver { _, event ->
+                        if (event == Lifecycle.Event.ON_RESUME) {
+                            notificationsOff = !notificationsEnabled(this@MainActivity)
+                        }
+                    }
+                    lifecycleOwner.lifecycle.addObserver(observer)
+                    onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
                 }
 
                 // Live row for today, updated by Room whenever the step service writes.
@@ -242,6 +268,10 @@ class MainActivity : ComponentActivity() {
                                     trackingActive = trackingActive,
                                     isRecording = trackingActive,
                                     onToggleRecording = toggleRecording,
+                                    notificationsOff = notificationsOff,
+                                    onOpenNotificationSettings = {
+                                        startActivity(appNotificationSettingsIntent(this@MainActivity))
+                                    },
                                     onStartTracking = {
                                         if (hasActivityRecognition()) {
                                             startTracking()
