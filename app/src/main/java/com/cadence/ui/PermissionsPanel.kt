@@ -169,6 +169,14 @@ fun PermissionsPanel(modifier: Modifier = Modifier) {
                 onOpenSettings = { startIntent(context, Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)) },
             )
 
+            TextButton(
+                onClick = { startIntent(context, appSettingsIntent(context)) },
+                modifier = Modifier
+                    .heightIn(min = 48.dp)
+                    .semantics { contentDescription = "Manage permissions in system settings" },
+            ) {
+                Text("Manage in system settings")
+            }
             Text(
                 "Android only lets you revoke permissions in system settings.",
                 style = MaterialTheme.typography.bodySmall,
@@ -254,17 +262,7 @@ private fun PermissionRow(
             }
         }
     }
-    if (manageable) {
-        // Outside the merged row, so TalkBack reaches this button on its own.
-        TextButton(
-            onClick = onOpenSettings,
-            modifier = Modifier
-                .heightIn(min = 48.dp)
-                .semantics { contentDescription = "Manage $name in system settings" },
-        ) {
-            Text("Manage in system settings")
-        }
-    }
+
     }
 }
 

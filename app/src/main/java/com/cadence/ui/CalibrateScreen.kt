@@ -1,5 +1,11 @@
 package com.cadence.ui
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.semantics.Role
+import androidx.compose.foundation.clickable
+import androidx.compose.material3.Surface
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.ActivityNotFoundException
@@ -28,6 +34,7 @@ import androidx.compose.material.icons.filled.Route
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -304,6 +311,7 @@ fun CalibrateScreen(
     Column(
         modifier = modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
@@ -418,33 +426,37 @@ fun CalibrateScreen(
 
         // Start and Stop are outside the entrance animation, so the button is full size and
         // visible from the first frame.
-        if (walking) {
-            FilledTonalButton(
-                shape = MaterialTheme.shapes.extraLarge,
-                interactionSource = buttonSource,
-                onClick = { finishWalk() },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .pressScale(buttonSource),
-            ) {
-                Text("Stop")
-            }
-        } else {
-            Button(
-                shape = MaterialTheme.shapes.extraLarge,
-                interactionSource = buttonSource,
-                onClick = {
-                    message = null
-                    gpsPaused = false
-                    requestNotifications()
+        // A plain surface with explicit colours, so the label cannot be hidden by button defaults.
+        val actionLabel = if (walking) "Stop" else "Start"
+        val actionColor = if (walking) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.primary
+        val actionText = if (walking) MaterialTheme.colorScheme.onSecondaryContainer else MaterialTheme.colorScheme.onPrimary
+        Surface(
+            shape = MaterialTheme.shapes.extraLarge,
+            color = actionColor,
+            contentColor = actionText,
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = 56.dp)
+                .pressScale(buttonSource)
+                .clickable(
+                    interactionSource = buttonSource,
+                    indication = null,
+                    role = Role.Button,
+                ) {
+                    if (walking) {
+                        finishWalk()
+                    } else {
+                        message = null
+                        gpsPaused = false
+                        requestNotifications()
+                    }
                 },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .heightIn(min = 56.dp)
-                    .pressScale(buttonSource),
+        ) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             ) {
-                Text("Start")
+                Text(actionLabel, style = MaterialTheme.typography.titleMedium, color = actionText)
             }
         }
 
