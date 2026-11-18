@@ -1,27 +1,37 @@
 package com.stepwise
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
-import androidx.compose.material3.Text
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.Modifier
+import androidx.core.content.ContextCompat
 import com.stepwise.data.ProfileState
 import com.stepwise.data.ProfileStore
+import com.stepwise.data.StepDatabase
+import com.stepwise.data.StepDayEntity
+import com.stepwise.domain.DayMetrics
 import com.stepwise.domain.Profile
 import com.stepwise.domain.Sex
 import com.stepwise.domain.computeDay
+import com.stepwise.steps.StepCounterService
 import com.stepwise.ui.AppShell
 import com.stepwise.ui.CalibrateScreen
 import com.stepwise.ui.Destination
+import com.stepwise.ui.ProfileScreen
 import com.stepwise.ui.StepwiseTheme
 import com.stepwise.ui.TodayScreen
-import com.stepwise.ui.ProfileScreen
 import com.stepwise.ui.TrendScreen
 import java.time.LocalDate
 
@@ -29,15 +39,30 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val profileStore = ProfileStore(applicationContext)
+        val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
 
         setContent {
             StepwiseTheme {
                 var selected by rememberSaveable { mutableStateOf(Destination.TODAY) }
                 var profileState by remember { mutableStateOf(profileStore.load()) }
                 var trackingActive by rememberSaveable { mutableStateOf(false) }
+                val today = LocalDate.now().toString()
 
-                // Step count is a placeholder until the step counter is wired in by the integrator.
-                val todaySteps = 0
+                // Live row for today, updated by Room whenever the step service writes.
+                val todayRow by produceState<StepDayEntity?>(initialValue = null, today) {
+                    dao.getRangeFlow(today, today).collect { rows -> value = rows.firstOrNull() }
+                }
+                val todaySteps = todayRow?.steps ?: 0
+
+                // Requests the activity-recognition permission, then starts the service.
+                val permissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission(),
+                ) { granted ->
+                    if (granted) {
+                        StepCounterService.start(applicationContext)
+                        trackingActive = true
+                    }
+                }
 
                 AppShell(selected = selected, onSelect = { selected = it }) { padding ->
                     val modifier = Modifier.padding(padding)
@@ -45,10 +70,20 @@ class MainActivity : ComponentActivity() {
                         Destination.TODAY -> {
                             val profile = profileState?.toDomainProfile()
                             TodayScreen(
-                                day = profile?.let { computeDay(it, todaySteps) },
+                                day = todayDayMetrics(todayRow, profile),
                                 profileMissing = profile == null,
                                 trackingActive = trackingActive,
-                                onStartTracking = { trackingActive = true },
+                                onStartTracking = {
+                                    if (hasActivityRecognition()) {
+                                        StepCounterService.start(applicationContext)
+                                        trackingActive = true
+                                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                                        permissionLauncher.launch(Manifest.permission.ACTIVITY_RECOGNITION)
+                                    } else {
+                                        StepCounterService.start(applicationContext)
+                                        trackingActive = true
+                                    }
+                                },
                                 modifier = modifier,
                             )
                         }
@@ -73,7 +108,7 @@ class MainActivity : ComponentActivity() {
                                     profileState = updated
                                 }
                             },
-                            currentSteps = { todaySteps },
+                            currentSteps = { todayRow?.steps ?: 0 },
                             modifier = modifier,
                         )
                     }
@@ -81,6 +116,29 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun hasActivityRecognition(): Boolean =
+        Build.VERSION.SDK_INT < Build.VERSION_CODES.Q ||
+            ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION) ==
+            PackageManager.PERMISSION_GRANTED
+}
+
+/**
+ * Today's metrics: the stored row when it exists (the step service keeps it up to date),
+ * otherwise a zero-step estimate from the profile. Null when there is no usable profile.
+ */
+private fun todayDayMetrics(row: StepDayEntity?, profile: Profile?): DayMetrics? {
+    if (row != null && row.totalKcal > 0.0) {
+        return DayMetrics(
+            steps = row.steps,
+            distanceM = row.distanceM,
+            activeKcal = row.activeKcal,
+            bmrKcal = row.bmrKcal,
+            rmrKcal = row.rmrKcal,
+            totalKcal = row.totalKcal,
+        )
+    }
+    return profile?.let { computeDay(it, row?.steps ?: 0) }
 }
 
 /** Converts the stored profile to the domain type; null if the stored values are not usable. */
