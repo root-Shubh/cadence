@@ -47,7 +47,6 @@ import kotlinx.coroutines.flow.sample
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.time.ZoneId
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Foreground service that counts steps from the hardware TYPE_STEP_COUNTER sensor, or from the
@@ -88,24 +87,35 @@ class StepCounterService : Service(), SensorEventListener {
     private var tickerJob: Job? = null
     private var notifyJob: Job? = null
 
-    // Sensor path state. Only touched on the main thread.
-    /** Last raw reading seen by the sensor path, for the live count. */
-    private var sensorRaw: Long? = null
+    // Step counts for today. Written by the sensor path (main thread) and read by the consumer,
+    // so every field below is guarded by countLock.
+    private val countLock = Any()
 
-    /** The day (yyyy-MM-dd) the live count belongs to. */
+    /** The day (yyyy-MM-dd) the counts belong to. */
     private var liveDay: String? = null
 
-    // Shared between the sensor path and the consumer.
-    /** Newest hardware reading. The consumer stores the difference since the last stored raw. */
-    @Volatile private var latestRaw: Long? = null
+    /** Stored total for today when counting started. 0 after a day change. */
+    private var storedBase = 0L
 
-    /** Software steps (accelerometer) not yet stored. */
-    private val softPending = AtomicLong(0L)
+    /** Part of [storedBase] that the hardware counter had not yet reached (see [readExcessFor]). */
+    private var excessBase = 0L
+
+    /** Steps from the hardware counter since the start of today. */
+    private var counterSteps = 0L
+
+    /** Steps from the accelerometer since the start of today. */
+    private var accelSteps = 0L
+
+    /** Newest hardware reading. Deltas are taken against it. */
+    private var sensorRaw: Long? = null
 
     @Volatile private var started = false
     @Volatile private var destroyed = false
 
     // Consumer-only state. Only used inside the consumer coroutine.
+    /** What the last successful write stored: the day, the total and the raw reading. */
+    private var flushedDay: String? = null
+    private var flushedTotal: Int? = null
     private var flushedRaw: Long? = null
     private var lastWriteMillis = 0L
     private var lastWidgetBroadcastMillis = 0L
@@ -128,7 +138,7 @@ class StepCounterService : Service(), SensorEventListener {
                     val now = System.currentTimeMillis()
                     val force = forceFlush
                     forceFlush = false
-                    if (isDirty() && (force || shouldWriteNow(lastWriteMillis, now))) flush(now)
+                    if (force || shouldWriteNow(lastWriteMillis, now)) flush(now)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -222,9 +232,13 @@ class StepCounterService : Service(), SensorEventListener {
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
         // Diagnostics are written before the count, so events are visible even if storage fails.
         recordEventDiagnostics(now, raw)
-        countLive(now, StepDelta.nextDelta(sensorRaw, raw))
-        sensorRaw = raw
-        latestRaw = raw
+        val live = synchronized(countLock) {
+            rollDayLocked(now)
+            counterSteps += StepDelta.nextDelta(sensorRaw, raw)
+            sensorRaw = raw
+            liveLocked()
+        }
+        LiveSteps.reset(live)
         wakeups.trySend(Unit)
     }
 
@@ -275,7 +289,6 @@ class StepCounterService : Service(), SensorEventListener {
      * count starts from the stored value and no sensor event is handled before that.
      */
     private fun beginCounting(plan: ServicePlan) {
-        sensorRaw = readStoredRaw()
         scope.launch {
             val total = try {
                 todayStoredSteps()
@@ -287,18 +300,33 @@ class StepCounterService : Service(), SensorEventListener {
             }
             mainHandler.post {
                 if (destroyed) return@post
-                liveDay = todayIso()
-                LiveSteps.reset(total)
-                updateNotification(total)
+                val today = todayIso()
+                val live = synchronized(countLock) {
+                    liveDay = today
+                    storedBase = total.toLong()
+                    excessBase = readExcessFor(today).coerceIn(0L, storedBase)
+                    counterSteps = 0L
+                    accelSteps = 0L
+                    sensorRaw = readStoredRaw()
+                    liveLocked()
+                }
+                LiveSteps.reset(live)
+                updateNotification(live)
                 startSource(plan)
             }
         }
     }
 
-    /** Registers the sensor or accelerometer listener, once. Runs on the main thread. */
+    /**
+     * Registers the sensor listeners, once. Runs on the main thread. While counting with a step
+     * counter, the accelerometer also runs for the whole session, so steps show without the
+     * counter's batching delay.
+     */
     private fun startSource(plan: ServicePlan) {
         val ok = when (plan) {
-            ServicePlan.COUNT -> registerListener()
+            ServicePlan.COUNT -> registerListener().also { registered ->
+                if (registered && hasAccelerometer(this)) startAccelerometer()
+            }
             ServicePlan.ACCELEROMETER -> startAccelerometer()
             else -> false
         }
@@ -338,59 +366,93 @@ class StepCounterService : Service(), SensorEventListener {
         return true
     }
 
+    /** Accelerometer step (main thread): counts it and updates the live total. */
     private fun onSoftwareStep() {
         val now = System.currentTimeMillis()
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
-        countLive(now, 1L)
-        softPending.incrementAndGet()
+        val live = synchronized(countLock) {
+            rollDayLocked(now)
+            accelSteps++
+            liveLocked()
+        }
+        LiveSteps.reset(live)
         wakeups.trySend(Unit)
     }
 
-    /** Sensor path: adds [delta] to the live count, with no I/O. Resets at the day boundary. */
-    private fun countLive(nowMillis: Long, delta: Long) {
+    /** Starts a new day's counts from zero when the calendar day changes. Call under [countLock]. */
+    private fun rollDayLocked(nowMillis: Long) {
         val day = StepDelta.dateIsoFor(nowMillis, ZoneId.systemDefault())
-        if (day != liveDay) {
-            liveDay = day
-            LiveSteps.reset(0)
-        }
-        if (delta > 0) LiveSteps.add(delta.coerceAtMost(Int.MAX_VALUE.toLong()).toInt())
-    }
-
-    private fun isDirty(): Boolean {
-        val raw = latestRaw
-        return softPending.get() != 0L || (raw != null && raw != flushedRaw)
+        if (day == liveDay) return
+        liveDay = day
+        storedBase = 0L
+        excessBase = 0L
+        counterSteps = 0L
+        accelSteps = 0L
     }
 
     /**
-     * Stores the steps not yet saved: the raw counter difference since the last stored reading,
-     * plus software steps. The raw prefs are written only after the database write succeeds.
-     * Runs only on the consumer coroutine.
+     * Today's live total: the larger of the counter based total and the accelerometer based
+     * total. Call under [countLock].
+     */
+    private fun liveLocked(): Int = liveTotal(counterTotalLocked(), accelTotalLocked())
+
+    /** Counter based total: the stored base, less its excess, plus hardware steps. */
+    private fun counterTotalLocked(): Int = clampToInt(storedBase - excessBase + counterSteps)
+
+    /** Accelerometer based total: the stored total at start plus accelerometer steps. */
+    private fun accelTotalLocked(): Int = clampToInt(storedBase + accelSteps)
+
+    private fun clampToInt(value: Long): Int = value.coerceIn(0L, Int.MAX_VALUE.toLong()).toInt()
+
+    /** The counts to store for the current day, read under [countLock]. */
+    private class Snapshot(val day: String, val counterTotal: Int, val accelTotal: Int, val raw: Long?)
+
+    private fun snapshotLocked(): Snapshot? {
+        val day = liveDay ?: return null
+        return Snapshot(day, counterTotalLocked(), accelTotalLocked(), sensorRaw)
+    }
+
+    /**
+     * Stores today's total, max(counter total, accelerometer total), never lower than the stored
+     * value. Skips the write when nothing changed since the last successful write. The raw
+     * prefs are written only after the database write succeeds. Runs only on the consumer.
      */
     private suspend fun flush(nowMillis: Long) {
-        val raw = latestRaw
-        val prefs = prefs()
-        val stored = readStoredRaw()
-        val rawDelta = if (raw != null) StepDelta.nextDelta(stored, raw) else 0L
-        val software = softPending.getAndSet(0L)
-        val delta = rawDelta + software
-        if (delta == 0L && (raw == null || raw == stored)) {
-            flushedRaw = raw
-            return
-        }
+        val snap = synchronized(countLock) { snapshotLocked() } ?: return
+        val candidate = liveTotal(snap.counterTotal, snap.accelTotal)
+        if (snap.day == flushedDay && candidate == flushedTotal && snap.raw == flushedRaw) return
         try {
-            addToToday(delta)
-            if (raw != null) prefs.edit().putLong(KEY_LAST_RAW, raw).apply()
-            flushedRaw = raw
+            val state: ProfileState? = ProfileStore(applicationContext).load()
+            val profileId = state?.id ?: DEFAULT_PROFILE_ID
+            val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
+            val stored = dao.getByDate(profileId, snap.day)?.steps ?: 0
+            val merged = mergeStored(stored, candidate)
+            dao.upsert(toEntity(state, profileId, snap.day, merged))
+            val edit = prefs().edit()
+                .putString(KEY_EXCESS_DAY, snap.day)
+                .putLong(KEY_EXCESS, (merged - snap.counterTotal).coerceAtLeast(0).toLong())
+            snap.raw?.let { edit.putLong(KEY_LAST_RAW, it) }
+            edit.apply()
+            flushedDay = snap.day
+            flushedTotal = candidate
+            flushedRaw = snap.raw
             lastWriteMillis = nowMillis
             sendWidgetUpdateIfDue(nowMillis)
         } catch (e: CancellationException) {
-            softPending.addAndGet(software)
             throw e
         } catch (e: Exception) {
-            // Put the software steps back so they are stored on the next attempt.
-            softPending.addAndGet(software)
+            // Nothing is marked as written, so the next attempt stores it again.
             Log.w(TAG, "Failed to record step reading", e)
         }
+    }
+
+    /**
+     * The part of the stored total for [day] that the counter had not reached when it was last
+     * written (accelerometer steps the counter had not reported). Only valid for the same day.
+     */
+    private fun readExcessFor(day: String): Long {
+        val prefs = prefs()
+        return if (prefs.getString(KEY_EXCESS_DAY, null) == day) prefs.getLong(KEY_EXCESS, 0L) else 0L
     }
 
     /** Asks the home widget to redraw, at most once per [WIDGET_MIN_INTERVAL_MS]. */
@@ -402,19 +464,6 @@ class StepCounterService : Service(), SensorEventListener {
             Intent(AppWidgetManager.ACTION_APPWIDGET_UPDATE)
                 .setComponent(ComponentName(this, StepsWidgetProvider::class.java)),
         )
-    }
-
-    /** Adds [delta] steps to today's row. Runs on the consumer coroutine. */
-    private suspend fun addToToday(delta: Long) {
-        val dateIso = todayIso()
-        val state: ProfileState? = ProfileStore(applicationContext).load()
-        val profileId = state?.id ?: DEFAULT_PROFILE_ID
-        val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
-        val current = dao.getByDate(profileId, dateIso)
-        val steps = ((current?.steps ?: 0).toLong() + delta)
-            .coerceIn(0L, Int.MAX_VALUE.toLong())
-            .toInt()
-        dao.upsert(toEntity(state, profileId, dateIso, steps))
     }
 
     private suspend fun todayStoredSteps(): Int {
@@ -550,6 +599,10 @@ class StepCounterService : Service(), SensorEventListener {
 
         /** Persisted user intent: true while the user has counting turned on. */
         const val KEY_COUNTING_ON = "counting_on"
+
+        /** Accelerometer steps not yet reflected in the counter, stored with the day they belong to. */
+        private const val KEY_EXCESS = "accel_excess"
+        private const val KEY_EXCESS_DAY = "accel_excess_day"
 
         private const val GOALS_PREFS_NAME = "stepwise_goals"
         private const val GOALS_KEY_DAILY = "daily"
