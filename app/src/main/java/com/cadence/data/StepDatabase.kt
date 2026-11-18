@@ -34,35 +34,10 @@ val STEP_DB_MIGRATION_1_2: Migration = object : Migration(1, 2) {
     }
 }
 
-/**
- * Version 2 to 3: adds the route_points table for GPS route recording. Existing rows are kept.
- * Route points are a map aid only; step counts never read this table.
- */
-val STEP_DB_MIGRATION_2_3: Migration = object : Migration(2, 3) {
-    override fun migrate(db: SupportSQLiteDatabase) {
-        db.execSQL(
-            "CREATE TABLE IF NOT EXISTS route_points (" +
-                "profileId TEXT NOT NULL, " +
-                "dateIso TEXT NOT NULL, " +
-                "timeMillis INTEGER NOT NULL, " +
-                "lat REAL NOT NULL, " +
-                "lon REAL NOT NULL, " +
-                "accuracyM REAL NOT NULL, " +
-                "PRIMARY KEY(profileId, dateIso, timeMillis))",
-        )
-    }
-}
-
-@Database(
-    entities = [StepDayEntity::class, RoutePointEntity::class],
-    version = 3,
-    exportSchema = false,
-)
+@Database(entities = [StepDayEntity::class], version = 2, exportSchema = false)
 abstract class StepDatabase : RoomDatabase() {
 
     abstract fun stepDayDao(): StepDayDao
-
-    abstract fun routePointDao(): RoutePointDao
 
     companion object {
         private const val DB_NAME = "stepwise.db"
@@ -76,7 +51,7 @@ abstract class StepDatabase : RoomDatabase() {
                     context.applicationContext,
                     StepDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(STEP_DB_MIGRATION_1_2, STEP_DB_MIGRATION_2_3)
+                ).addMigrations(STEP_DB_MIGRATION_1_2)
                     .build().also { INSTANCE = it }
             }
     }

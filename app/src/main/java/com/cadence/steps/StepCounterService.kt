@@ -38,6 +38,8 @@ import com.cadence.MainActivity
 import com.cadence.domain.Profile
 import com.cadence.domain.Sex
 import com.cadence.domain.computeDay
+import com.cadence.patterns.PatternStore
+import com.cadence.patterns.dayIsoOf
 import com.cadence.widget.StepsWidgetProvider
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
@@ -154,6 +156,9 @@ class StepCounterService : Service(), SensorEventListener {
 
     /** Steps reported by TYPE_STEP_DETECTOR since counting started today. Guarded by [countLock]. */
     private var detectedSinceStart = 0L
+
+    /** Detector step times (epoch millis) not yet written to the day file. Guarded by [countLock]. */
+    private val pendingStepMillis = ArrayList<Long>()
 
     /** Detector listener, registered only while counting with a detector. Main thread only. */
     private var detectorSource: StepDetectorSource? = null
@@ -469,6 +474,7 @@ class StepCounterService : Service(), SensorEventListener {
         val (live, running) = synchronized(countLock) {
             rollDayLocked(now)
             detectedSinceStart++
+            pendingStepMillis.add(now)
             liveLocked() to detectedSinceStart
         }
         if (running <= DETECTOR_LOG_EVENTS) {
@@ -570,7 +576,33 @@ class StepCounterService : Service(), SensorEventListener {
      * lead is not stored. Skips the write when nothing changed since the last successful write.
      * The raw prefs are written only after the database write succeeds. Runs only on the consumer.
      */
+    /**
+     * Moves the detector step times since the last write into the day files (one timestamp per
+     * step). Failed days go back in the buffer for the next pass. Runs only on the consumer.
+     */
+    private suspend fun writeStepTimes() {
+        val state: ProfileState? = ProfileStore(applicationContext).load()
+        val profileId = state?.id ?: DEFAULT_PROFILE_ID
+        val times = synchronized(countLock) {
+            if (pendingStepMillis.isEmpty()) return
+            ArrayList(pendingStepMillis).also { pendingStepMillis.clear() }
+        }
+        val store = PatternStore(filesDir)
+        val zone = ZoneId.systemDefault()
+        times.groupBy { dayIsoOf(it, zone) }.forEach { (day, list) ->
+            try {
+                store.appendSteps(profileId, day, list)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                Log.w(TAG, "Failed to record step times", e)
+                synchronized(countLock) { pendingStepMillis.addAll(0, list) }
+            }
+        }
+    }
+
     private suspend fun flush(nowMillis: Long) {
+        writeStepTimes()
         val snap = synchronized(countLock) { snapshotLocked() } ?: return
         // Store what the screen shows, so stopping does not drop the accelerometer steps. The
         // excess (stored minus counter total) is kept so the counter still reconciles on reload.

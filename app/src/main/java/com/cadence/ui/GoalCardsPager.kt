@@ -35,26 +35,25 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.cadence.goals.PeriodSummary
-import com.cadence.gps.GpsFix
 import java.util.Locale
 
-/** Number of pages: Daily, Today's route, Weekly and Monthly. */
+/** Number of pages: Daily, Pattern gallery, Weekly and Monthly. */
 private const val PAGE_COUNT = 4
 
 /**
- * Swipeable row of cards under the Today ring: page 0 is the daily card passed in as
- * [dailyCard]; page 1 is today's route built from [routePoints]; page 2 is the weekly goal;
- * page 3 is the monthly goal. Snap fling keeps one page on screen, and dots below show the
+ * Swipeable row of four cards under the Today ring: page 0 is the daily card passed in as
+ * [dailyCard]; page 1 is the daily pattern gallery passed in as [gallery]; page 2 is the weekly
+ * goal; page 3 is the monthly goal. Snap fling keeps one page on screen, and dots below show the
  * current page. A null [weekly] or [monthly] shows a placeholder card.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GoalCardsPager(
     dailyCard: @Composable () -> Unit,
+    gallery: @Composable () -> Unit,
     weekly: PeriodSummary?,
     monthly: PeriodSummary?,
     modifier: Modifier = Modifier,
-    routePoints: List<GpsFix> = emptyList(),
 ) {
     val listState = rememberLazyListState()
     val currentPage by remember {
@@ -70,7 +69,7 @@ fun GoalCardsPager(
             flingBehavior = rememberSnapFlingBehavior(listState),
         ) {
             item(key = "daily") { Page(pageWidth) { dailyCard() } }
-            item(key = "route") { Page(pageWidth) { RouteCard(points = routePoints) } }
+            item(key = "patterns") { Page(pageWidth) { gallery() } }
             item(key = "weekly") {
                 Page(pageWidth) {
                     GoalPeriodCard(
