@@ -162,6 +162,8 @@ class MainActivity : ComponentActivity() {
                             history = history,
                             endDate = LocalDate.now(),
                             modifier = modifier,
+                            dailyGoal = goals.dailySteps,
+                            weeklyGoal = goals.weeklySteps,
                         )
                         Destination.PROFILE -> ProfileScreen(
                             initial = profileState,
