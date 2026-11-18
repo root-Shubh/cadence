@@ -50,6 +50,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -126,6 +127,9 @@ fun CalibrateScreen(
     // Latest GPS fix accuracy in metres (any fix, accepted or not), and how many fixes were used.
     var gpsAccuracyM by remember { mutableStateOf<Float?>(null) }
     var gpsFixesUsed by remember { mutableIntStateOf(0) }
+    var gnssInView by remember { mutableIntStateOf(0) }
+    var gnssUsed by remember { mutableIntStateOf(0) }
+    var lastFixMillis by remember { mutableStateOf<Long?>(null) }
     var message by remember { mutableStateOf<String?>(null) }
     // True when the user asked to start and the walk waits for permission and GPS.
     var pendingStart by remember { mutableStateOf(false) }
@@ -148,6 +152,7 @@ fun CalibrateScreen(
         object : LocationListener {
             override fun onLocationChanged(location: Location) {
                 gpsAccuracyM = location.accuracy
+                lastFixMillis = System.currentTimeMillis()
                 val before = walk.distance.acceptedFixCount
                 Log.d(
                     GPS_LOG_TAG,
@@ -216,9 +221,32 @@ fun CalibrateScreen(
     }
 
     // GPS listener is registered only while walking and removed on Stop or when leaving the screen.
-    DisposableEffect(walking) {
-        if (walking) startGps(locationManager, listener)
-        onDispose { locationManager.removeUpdates(listener) }
+    // GPS stays warm while this screen is open, so a lock is quick when a walk starts. Satellite
+    // status comes from the GNSS callback and is shown on screen.
+    DisposableEffect(Unit) {
+        val handler = android.os.Handler(Looper.getMainLooper())
+        val gnss = object : android.location.GnssStatus.Callback() {
+            override fun onSatelliteStatusChanged(status: android.location.GnssStatus) {
+                var used = 0
+                for (i in 0 until status.satelliteCount) if (status.usedInFix(i)) used++
+                gnssInView = status.satelliteCount
+                gnssUsed = used
+            }
+        }
+        val hasFine = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) ==
+            android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (hasFine) {
+            try {
+                startGps(locationManager, listener)
+                locationManager.registerGnssStatusCallback(gnss, handler)
+            } catch (e: SecurityException) {
+                Log.w(GPS_LOG_TAG, "GPS not started: permission", e)
+            }
+        }
+        onDispose {
+            locationManager.removeUpdates(listener)
+            try { locationManager.unregisterGnssStatusCallback(gnss) } catch (e: SecurityException) { }
+        }
     }
 
     // Leaving the screen ends any counting this screen started.
@@ -402,6 +430,40 @@ fun CalibrateScreen(
         }
 
         Reveal(index = 2, modifier = Modifier.fillMaxWidth()) {
+            val nowMs by produceState(System.currentTimeMillis()) {
+                while (true) {
+                    value = System.currentTimeMillis()
+                    kotlinx.coroutines.delay(1000L)
+                }
+            }
+            val gpsOnNow = isGpsEnabled(locationManager)
+            Card(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Text("GPS", style = MaterialTheme.typography.titleMedium)
+                    Text(
+                        when {
+                            !gpsOnNow -> "GPS is off. Turn on location services."
+                            lastFixMillis == null -> "Searching for satellites..."
+                            else -> "Locked"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text("Satellites in view: $gnssInView, used in fix: $gnssUsed", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        "Accuracy: " + (gpsAccuracyM?.let { "%.0f m".format(it) } ?: "none yet"),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        "Last fix: " + (lastFixMillis?.let { ((nowMs - it) / 1000).toString() + " s ago" } ?: "none yet") +
+                            " · Fixes used for distance: $gpsFixesUsed",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             StatCard(
                 label = "Distance",
