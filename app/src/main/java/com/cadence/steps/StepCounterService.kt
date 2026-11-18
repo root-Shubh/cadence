@@ -330,6 +330,7 @@ class StepCounterService : Service(), SensorEventListener {
     }
 
     override fun onDestroy() {
+        Log.w("CadenceSteps", "service destroyed; counting flag=${prefs().getBoolean(KEY_COUNTING_ON, false)}", Throwable("destroy"))
         destroyed = true
         notifyJob?.cancel()
         tickerJob?.cancel()
@@ -1022,6 +1023,7 @@ class StepCounterService : Service(), SensorEventListener {
         }
 
         fun stop(context: Context) {
+            Log.w("CadenceSteps", "stop requested by app", Throwable("stop call site"))
             context.stopService(Intent(context, StepCounterService::class.java))
         }
     }
