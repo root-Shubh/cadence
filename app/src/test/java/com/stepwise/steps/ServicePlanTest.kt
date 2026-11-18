@@ -21,4 +21,36 @@ class ServicePlanTest {
         assertEquals(ServicePlan.NO_PERMISSION, servicePlan(hasPermission = false, hasSensor = true))
         assertEquals(ServicePlan.NO_PERMISSION, servicePlan(hasPermission = false, hasSensor = false))
     }
+
+    @Test
+    fun noStepCounterWithAccelerometerGivesAccelerometerPlan() {
+        assertEquals(
+            ServicePlan.ACCELEROMETER,
+            servicePlan(hasPermission = true, hasSensor = false, hasAccelerometer = true),
+        )
+    }
+
+    @Test
+    fun stepCounterWinsOverAccelerometer() {
+        assertEquals(
+            ServicePlan.COUNT,
+            servicePlan(hasPermission = true, hasSensor = true, hasAccelerometer = true),
+        )
+    }
+
+    @Test
+    fun noSensorAndNoAccelerometerGivesNoSensorPlan() {
+        assertEquals(
+            ServicePlan.NO_SENSOR,
+            servicePlan(hasPermission = true, hasSensor = false, hasAccelerometer = false),
+        )
+    }
+
+    @Test
+    fun missingPermissionWinsOverAccelerometer() {
+        assertEquals(
+            ServicePlan.NO_PERMISSION,
+            servicePlan(hasPermission = false, hasSensor = false, hasAccelerometer = true),
+        )
+    }
 }

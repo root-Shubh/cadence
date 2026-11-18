@@ -10,6 +10,12 @@ enum class ServicePlan {
 
     /** ACTIVITY_RECOGNITION not granted: show a notice and stop. */
     NO_PERMISSION,
+
+    /**
+     * No step counter, but an accelerometer exists: count steps in software with
+     * [StepDetector] and show the "sensor-free" notification.
+     */
+    ACCELEROMETER,
 }
 
 /**
@@ -17,8 +23,13 @@ enum class ServicePlan {
  * when the sensor exists. The service must still call startForeground in every case, because
  * Android kills the app if startForegroundService is not followed by startForeground in time.
  */
-fun servicePlan(hasPermission: Boolean, hasSensor: Boolean): ServicePlan = when {
+fun servicePlan(
+    hasPermission: Boolean,
+    hasSensor: Boolean,
+    hasAccelerometer: Boolean = false,
+): ServicePlan = when {
     !hasPermission -> ServicePlan.NO_PERMISSION
-    !hasSensor -> ServicePlan.NO_SENSOR
-    else -> ServicePlan.COUNT
+    hasSensor -> ServicePlan.COUNT
+    hasAccelerometer -> ServicePlan.ACCELEROMETER
+    else -> ServicePlan.NO_SENSOR
 }

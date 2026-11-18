@@ -21,6 +21,26 @@ fun stepSensorState(context: Context): StepSensorState {
     return if (sensor != null) StepSensorState.Available else StepSensorState.NoSensor
 }
 
+/** Whether the device exposes an accelerometer, used by the software fallback. */
+fun hasAccelerometer(context: Context): Boolean {
+    val manager = context.getSystemService(SensorManager::class.java)
+    return manager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) != null
+}
+
+/** How steps can be counted on this device: hardware counter, accelerometer, or not at all. */
+sealed class StepTrackingSource {
+    object StepCounter : StepTrackingSource()
+    object Accelerometer : StepTrackingSource()
+    object None : StepTrackingSource()
+}
+
+/** The extended state: a step counter wins, then the accelerometer fallback, else none. */
+fun stepTrackingSource(context: Context): StepTrackingSource = when {
+    stepSensorState(context) is StepSensorState.Available -> StepTrackingSource.StepCounter
+    hasAccelerometer(context) -> StepTrackingSource.Accelerometer
+    else -> StepTrackingSource.None
+}
+
 /**
  * True when ACTIVITY_RECOGNITION is granted. Below Android 10 it is granted by default.
  */

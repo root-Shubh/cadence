@@ -116,6 +116,7 @@ fun ProfileScreen(
     onAddProfile: (String) -> Unit = {},
     onRenameProfile: (String, String) -> Unit = { _, _ -> },
     onDeleteActiveProfile: () -> Unit = {},
+    goalsSection: @Composable () -> Unit = {},
 ) {
     // The form reloads whenever the active profile changes. A new profile has zero values,
     // which show as blank fields.
@@ -406,6 +407,7 @@ fun ProfileScreen(
                 }
             }
         }
+        goalsSection()
     }
 
     if (confirmDeleteProfile) {
