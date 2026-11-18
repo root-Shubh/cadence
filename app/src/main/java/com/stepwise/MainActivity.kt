@@ -10,6 +10,10 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.runtime.Composable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -107,6 +111,19 @@ private data class ImportStatus(val message: String, val failed: Boolean)
 private const val CSV_UNREADABLE_MESSAGE =
     "Could not read this file. Export a CSV from Stepwise and try again."
 
+private fun MainActivity.isGpsOn(): Boolean =
+    (getSystemService(android.location.LocationManager::class.java)?.isProviderEnabled(android.location.LocationManager.GPS_PROVIDER) == true)
+
+@Composable
+private fun GpsOffBanner(onTurnOn: () -> Unit) {
+    androidx.compose.material3.Surface(color = androidx.compose.material3.MaterialTheme.colorScheme.errorContainer, modifier = Modifier.fillMaxWidth()) {
+        Row(modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+            androidx.compose.material3.Text("GPS is off. Turn location back on for accurate distance and vehicle detection.", style = androidx.compose.material3.MaterialTheme.typography.bodyMedium, color = androidx.compose.material3.MaterialTheme.colorScheme.onErrorContainer, modifier = Modifier.weight(1f))
+            androidx.compose.material3.TextButton(onClick = onTurnOn, modifier = Modifier.heightIn(min = 48.dp)) { androidx.compose.material3.Text("Turn on") }
+        }
+    }
+}
+
 class MainActivity : ComponentActivity() {
     /** Result of the latest CSV import. Null before any import and while one is running. */
     private var importStatus by mutableStateOf<ImportStatus?>(null)
@@ -139,6 +156,30 @@ class MainActivity : ComponentActivity() {
 
             StepwiseTheme(darkTheme = darkTheme) {
                 val scope = rememberCoroutineScope()
+                // App-wide GPS state: warn whenever location is off while the app is open.
+                var gpsOff by remember { mutableStateOf(!isGpsOn()) }
+                val lifecycleForGps = LocalLifecycleOwner.current
+                DisposableEffect(lifecycleForGps) {
+                    val receiver = object : android.content.BroadcastReceiver() {
+                        override fun onReceive(context: android.content.Context?, intent: android.content.Intent?) {
+                            gpsOff = !isGpsOn()
+                        }
+                    }
+                    ContextCompat.registerReceiver(
+                        this@MainActivity,
+                        receiver,
+                        android.content.IntentFilter(android.location.LocationManager.PROVIDERS_CHANGED_ACTION),
+                        ContextCompat.RECEIVER_NOT_EXPORTED,
+                    )
+                    val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+                        if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) gpsOff = !isGpsOn()
+                    }
+                    lifecycleForGps.lifecycle.addObserver(observer)
+                    onDispose {
+                        unregisterReceiver(receiver)
+                        lifecycleForGps.lifecycle.removeObserver(observer)
+                    }
+                }
                 var selected by rememberSaveable { mutableStateOf(Destination.TODAY) }
                 var profileState by remember { mutableStateOf(profileStore.load()) }
                 var profiles by remember { mutableStateOf(profileStore.listProfiles()) }
@@ -269,7 +310,11 @@ class MainActivity : ComponentActivity() {
                     },
                     modifier = Modifier.fillMaxSize().statusBarsPadding(),
                 ) else AppShell(selected = selected, onSelect = { selected = it }) { padding ->
-                    val modifier = Modifier.padding(padding)
+                    Column(modifier = Modifier.padding(padding).fillMaxSize()) {
+                    if (gpsOff) {
+                        GpsOffBanner(onTurnOn = { startActivity(android.content.Intent(android.provider.Settings.ACTION_LOCATION_SOURCE_SETTINGS)) })
+                    }
+                    val modifier = Modifier.weight(1f)
                     when (selected) {
                         Destination.TODAY -> {
                             val profile = profileState?.toDomainProfile()
@@ -421,6 +466,7 @@ class MainActivity : ComponentActivity() {
                             currentSteps = { if (liveTracking) liveSteps else (todayRow?.steps ?: 0) },
                             modifier = modifier,
                         )
+                    }
                     }
                 }
             }
