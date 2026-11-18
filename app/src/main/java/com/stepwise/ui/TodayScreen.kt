@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -44,17 +45,41 @@ fun TodayScreen(
             )
         }
 
-        Text(
-            text = day?.steps?.let { "%,d".format(Locale.US, it) } ?: "-",
-            style = MaterialTheme.typography.displayLarge,
-        )
-        Text("steps today", style = MaterialTheme.typography.labelLarge)
+        // Hero card: the step count on a subtly tinted surface.
+        Card(
+            modifier = Modifier.fillMaxWidth(),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        ) {
+            Column(modifier = Modifier.padding(20.dp)) {
+                Text(
+                    text = day?.steps?.let { "%,d".format(Locale.US, it) } ?: "-",
+                    style = MaterialTheme.typography.displayLarge,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    "steps today",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
-        Text(
-            text = day?.let { String.format(Locale.US, "%.2f km", it.distanceM / 1000.0) } ?: "-",
-            style = MaterialTheme.typography.headlineSmall,
-        )
-        Text("distance walked", style = MaterialTheme.typography.labelLarge)
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Column(modifier = Modifier.padding(16.dp)) {
+                Text(
+                    text = day?.let { String.format(Locale.US, "%.2f km", it.distanceM / 1000.0) } ?: "-",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                )
+                Text(
+                    "distance walked",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
 
         if (profileMissing) {
             Card(modifier = Modifier.fillMaxWidth()) {
@@ -71,15 +96,19 @@ fun TodayScreen(
                 }
             }
         } else if (day != null) {
-            CalorieLine("${Math.round(day.bmrKcal)} kcal", "BMR: calories your body burns at complete rest")
-            CalorieLine("${Math.round(day.rmrKcal)} kcal", "RMR: resting calories for the whole day")
-            CalorieLine("${Math.round(day.activeKcal)} kcal", "Active: extra calories from walking")
-            CalorieLine("${Math.round(day.totalKcal)} kcal", "Total: resting plus active calories")
+            CalorieCard("${Math.round(day.bmrKcal)} kcal", "BMR: calories your body burns at complete rest", MaterialTheme.colorScheme.primary)
+            CalorieCard("${Math.round(day.rmrKcal)} kcal", "RMR: resting calories for the whole day", MaterialTheme.colorScheme.primary)
+            CalorieCard("${Math.round(day.activeKcal)} kcal", "Active: extra calories from walking", MaterialTheme.colorScheme.secondary)
+            CalorieCard("${Math.round(day.totalKcal)} kcal", "Total: resting plus active calories", MaterialTheme.colorScheme.secondary)
         }
 
         if (!trackingActive) {
             Spacer(Modifier.height(8.dp))
-            Button(onClick = onStartTracking, modifier = Modifier.fillMaxWidth()) {
+            Button(
+                onClick = onStartTracking,
+                modifier = Modifier.fillMaxWidth(),
+                shape = MaterialTheme.shapes.extraLarge,
+            ) {
                 Text("Start counting")
             }
         }
@@ -87,9 +116,15 @@ fun TodayScreen(
 }
 
 @Composable
-private fun CalorieLine(value: String, label: String) {
-    Column {
-        Text(value, style = MaterialTheme.typography.titleLarge)
-        Text(label, style = MaterialTheme.typography.bodySmall)
+private fun CalorieCard(value: String, label: String, valueColor: androidx.compose.ui.graphics.Color) {
+    Card(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Text(value, style = MaterialTheme.typography.titleLarge, color = valueColor)
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
     }
 }
