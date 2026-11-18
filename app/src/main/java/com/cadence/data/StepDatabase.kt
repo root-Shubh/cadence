@@ -1,11 +1,11 @@
 package com.cadence.data
 
 import android.content.Context
+import androidx.sqlite.db.SupportSQLiteDatabase
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
-import androidx.sqlite.db.SupportSQLiteDatabase
 
 /**
  * Version 1 to 2: adds profileId (existing rows become 'default') and rebuilds the table so
@@ -34,7 +34,7 @@ val STEP_DB_MIGRATION_1_2: Migration = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [StepDayEntity::class], version = 2, exportSchema = false)
+@Database(entities = [StepDayEntity::class], version = 4, exportSchema = false)
 abstract class StepDatabase : RoomDatabase() {
 
     abstract fun stepDayDao(): StepDayDao
@@ -52,6 +52,7 @@ abstract class StepDatabase : RoomDatabase() {
                     StepDatabase::class.java,
                     DB_NAME,
                 ).addMigrations(STEP_DB_MIGRATION_1_2)
+                .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }
     }
