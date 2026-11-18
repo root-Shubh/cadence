@@ -55,6 +55,12 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.res.painterResource
+import com.stepwise.R
 import com.stepwise.data.ProfileState
 import com.stepwise.data.profileNameError
 import com.stepwise.data.validateProfile
@@ -190,12 +196,14 @@ fun OnboardingFlow(
                 },
                 label = "onboardingStep",
             ) { current ->
-                Column(
+                if (current == OnboardingStep.WELCOME) {
+                    WelcomeStep()
+                } else Column(
                     modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
                     verticalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
                     when (current) {
-                        OnboardingStep.WELCOME -> WelcomeStep()
+                        OnboardingStep.WELCOME -> Unit
                         OnboardingStep.PERMISSIONS -> PermissionsStep(
                             activityGranted = activityGranted,
                             locationGranted = locationGranted,
@@ -272,9 +280,34 @@ fun OnboardingFlow(
 
 @Composable
 private fun WelcomeStep() {
-    Text("Welcome to Stepwise", style = MaterialTheme.typography.headlineSmall)
-    Text("Everything stays on this phone. Nothing is uploaded.", style = MaterialTheme.typography.bodyLarge)
-    FeatureCarousel(modifier = Modifier.padding(top = 8.dp))}
+    Column(modifier = Modifier.fillMaxSize(), verticalArrangement = Arrangement.SpaceBetween) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Image(
+                painter = painterResource(R.drawable.ic_splash_mark),
+                contentDescription = null,
+                modifier = Modifier.size(72.dp),
+            )
+            Text("Welcome to Stepwise", style = MaterialTheme.typography.headlineSmall)
+            Text("Everything stays on this phone. Nothing is uploaded.", style = MaterialTheme.typography.bodyLarge)
+        }
+        Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
+            FeatureCarousel()
+        }
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            listOf("On this phone", "No account", "No ads").forEach { label ->
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, RoundedCornerShape(50))
+                        .padding(vertical = 10.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(label, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSecondaryContainer)
+                }
+            }
+        }
+    }
+}
 
 @Composable
 private fun PermissionsStep(
