@@ -110,3 +110,22 @@ fun StepwiseTheme(
         content = content,
     )
 }
+
+/**
+ * Container and text colours for the swipeable goal cards on Today (ARGB). Daily reuses the
+ * existing teal tokens in [LightPalette] and [DarkPalette]. Each text colour is the onContainer
+ * colour for its container, with a contrast ratio of at least 4.5:1 (see GoalCardColorsTest).
+ */
+object GoalCardTokens {
+    /** Weekly: warm amber / tan. */
+    const val WeeklyContainerLight = 0xFFFBE3B0L
+    const val WeeklyOnLight = 0xFF3D2A00L
+    const val WeeklyContainerDark = 0xFF4A3A12L
+    const val WeeklyOnDark = 0xFFFBE7C2L
+
+    /** Monthly: soft violet / indigo. */
+    const val MonthlyContainerLight = 0xFFE4DEFCL
+    const val MonthlyOnLight = 0xFF2B1A63L
+    const val MonthlyContainerDark = 0xFF3B3163L
+    const val MonthlyOnDark = 0xFFE4DEFFL
+}

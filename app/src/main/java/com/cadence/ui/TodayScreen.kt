@@ -43,6 +43,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cadence.domain.DailyRecord
 import com.cadence.domain.DayMetrics
+import com.cadence.goals.daysMonthToDate
+import com.cadence.goals.periodSummary
+import com.cadence.goals.stepsInLastDays
+import com.cadence.goals.stepsMonthToDate
 import java.time.LocalDate
 import java.util.Locale
 
@@ -108,11 +112,25 @@ fun TodayScreen(
 
             Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HeroStepCard(
-                        steps = steps,
-                        dailyGoal = dailyGoal,
-                        isRecording = isRecording,
-                        onToggleRecording = onToggleRecording,
+                    GoalCardsPager(
+                        dailyCard = {
+                            HeroStepCard(
+                                steps = steps,
+                                dailyGoal = dailyGoal,
+                                isRecording = isRecording,
+                                onToggleRecording = onToggleRecording,
+                            )
+                        },
+                        weekly = periodSummary(
+                            steps = stepsInLastDays(history, endDate, 7),
+                            goal = weeklyGoal,
+                            days = 7,
+                        ),
+                        monthly = periodSummary(
+                            steps = stepsMonthToDate(history, endDate),
+                            goal = monthlyGoal,
+                            days = daysMonthToDate(endDate),
+                        ),
                     )
                     if (notificationsOff) {
                         Row(
