@@ -146,6 +146,18 @@ class StepCounterService : Service(), SensorEventListener {
      */
     private var counterActive = false
 
+    /**
+     * True when TYPE_STEP_DETECTOR drives the live total (see [liveLocked]). The counter still
+     * drives the saved total. Set in [beginCounting]; false on devices without a detector.
+     */
+    private var detectorActive = false
+
+    /** Steps reported by TYPE_STEP_DETECTOR since counting started today. Guarded by [countLock]. */
+    private var detectedSinceStart = 0L
+
+    /** Detector listener, registered only while counting with a detector. Main thread only. */
+    private var detectorSource: StepDetectorSource? = null
+
     /** Newest hardware reading. Deltas are taken against it. */
     private var sensorRaw: Long? = null
 
@@ -322,6 +334,8 @@ class StepCounterService : Service(), SensorEventListener {
         }
         accelSource?.stop()
         accelSource = null
+        detectorSource?.stop()
+        detectorSource = null
         stopLocation()
         LiveSteps.setTracking(false)
         wakeups.close()
@@ -365,6 +379,8 @@ class StepCounterService : Service(), SensorEventListener {
                     counterSteps = 0L
                     accelUnmatched = 0L
                     counterActive = plan == ServicePlan.COUNT
+                    detectorActive = plan == ServicePlan.COUNT && hasStepDetector(this@StepCounterService)
+                    detectedSinceStart = 0L
                     lastCounterMillis = System.currentTimeMillis()
                     sensorRaw = readStoredRaw()
                     liveLocked()
@@ -384,9 +400,11 @@ class StepCounterService : Service(), SensorEventListener {
     private fun startSource(plan: ServicePlan) {
         val ok = when (plan) {
             ServicePlan.COUNT -> registerListener().also { registered ->
-                if (registered && hasAccelerometer(this)) startAccelerometer()
+                if (registered) startLiveSource()
             }
-            ServicePlan.ACCELEROMETER -> startAccelerometer()
+            ServicePlan.ACCELEROMETER -> startAccelerometer().also {
+                Log.d(TAG_STEPS, "Step source: accelerometer fallback (no step detector)")
+            }
             else -> false
         }
         if (!ok) {
@@ -415,6 +433,49 @@ class StepCounterService : Service(), SensorEventListener {
             0,
         )
         return listenerRegistered
+    }
+
+    /**
+     * The live source while counting with a step counter. With a TYPE_STEP_DETECTOR the detector
+     * drives the live total and the accelerometer stays off. Without one, the accelerometer runs
+     * alongside the counter as before. Main thread only.
+     */
+    private fun startLiveSource() {
+        if (detectorActive) {
+            val source = StepDetectorSource(this) { nanos -> onDetectorStep(nanos) }
+            if (source.start()) {
+                detectorSource = source
+                Log.d(TAG_STEPS, "Step source: TYPE_STEP_DETECTOR (live), TYPE_STEP_COUNTER (saved total)")
+                return
+            }
+            // Registration refused: fall back to the accelerometer path, as on a device without a detector.
+            Log.w(TAG_STEPS, "Step detector registration failed; using accelerometer fallback")
+            detectorActive = false
+            synchronized(countLock) { liveLocked() }.let { LiveSteps.reset(it) }
+        }
+        Log.d(TAG_STEPS, "Step source: TYPE_STEP_COUNTER (saved total) with accelerometer fallback")
+        if (hasAccelerometer(this)) startAccelerometer()
+    }
+
+    /**
+     * Detector step (main thread): one event is one step. Updates the live total at once and
+     * wakes the consumer, which stores it on its throttled schedule.
+     */
+    private fun onDetectorStep(timestampNanos: Long) {
+        if (vehiclePaused || destroyed) return
+        val now = System.currentTimeMillis()
+        recordStepForCadence(now)
+        wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
+        val (live, running) = synchronized(countLock) {
+            rollDayLocked(now)
+            detectedSinceStart++
+            liveLocked() to detectedSinceStart
+        }
+        if (running <= DETECTOR_LOG_EVENTS) {
+            Log.d(TAG_STEPS, "Detector event $running at ${timestampNanos / NANOS_PER_MILLI} ms, running count $running")
+        }
+        LiveSteps.reset(live)
+        wakeups.trySend(Unit)
     }
 
     /** Software path: one accelerometer listener for the whole service lifetime. */
@@ -470,13 +531,18 @@ class StepCounterService : Service(), SensorEventListener {
         excessBase = 0L
         counterSteps = 0L
         accelUnmatched = 0L
+        detectedSinceStart = 0L
     }
 
     /**
-     * Today's displayed total: the counter based total plus the capped accelerometer lead.
-     * Call under [countLock].
+     * Today's displayed total. With a step detector it is the base plus the detector steps,
+     * with no accelerometer lead. Otherwise it is the counter based total plus the capped
+     * accelerometer lead. Call under [countLock].
      */
     private fun liveLocked(): Int {
+        if (detectorActive) {
+            return liveFromDetector(clampToInt(storedBase - excessBase), detectedSinceStart)
+        }
         val now = System.currentTimeMillis()
         val cap = accelLeadCap(now, lastCounterMillis, StepDetector.MAX_STEPS_PER_SECOND)
         return displayTotal(
@@ -670,6 +736,8 @@ class StepCounterService : Service(), SensorEventListener {
         }
         accelSource?.stop()
         accelSource = null
+        detectorSource?.stop()
+        detectorSource = null
         notifyJob?.cancel()
         notifyJob = null
         LiveSteps.setTracking(false)
@@ -711,6 +779,7 @@ class StepCounterService : Service(), SensorEventListener {
             excessBase = 0L
             counterSteps = 0L
             accelUnmatched = 0L
+            detectedSinceStart = 0L
         }
         appendVehicleLog(nowMillis, newTotal)
         mainHandler.post { if (!destroyed) LiveSteps.reset(newTotal) }
@@ -881,6 +950,9 @@ class StepCounterService : Service(), SensorEventListener {
 
     companion object {
         private const val TAG = "StepCounterService"
+        private const val TAG_STEPS = "CadenceSteps"
+        private const val DETECTOR_LOG_EVENTS = 5L
+        private const val NANOS_PER_MILLI = 1_000_000L
         const val PREFS_NAME = "stepwise_tracker"
         const val KEY_LAST_RAW = "last_raw"
         const val KEY_SENSOR_MISSING = "sensor_missing"
