@@ -185,7 +185,7 @@ fun CalibrateScreen(
     }
 
     // Stops the walk on its own at the target step count. The user can still press Stop earlier.
-    LaunchedEffect(walking, shownSteps) {
+    LaunchedEffect(walking, shownSteps, distanceM) {
         if (walking && shouldAutoStop(shownSteps, distanceM)) finishWalk()
     }
 
