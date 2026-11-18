@@ -9,13 +9,25 @@ class DataReset(
     private val dao: StepDayDao,
 ) {
 
-    /** Removes the saved profile only. Step history is kept. */
+    /**
+     * Removes the active profile only. Its step history is kept. With no profile saved,
+     * nothing is deleted.
+     */
     suspend fun deleteProfile() {
-        profileStore.clear()
+        val activeId = profileStore.activeProfileId() ?: return
+        profileStore.deleteProfile(activeId)
     }
 
-    /** Removes all recorded step days only. The profile is kept. */
+    /** Removes all recorded step days of the active profile only. Profiles are kept. */
     suspend fun deleteAllRecordedData() {
-        dao.deleteAll()
+        dao.deleteAll(activeProfileIdOrDefault())
     }
+
+    /** Removes recorded step days of every profile. Only for a second, explicit confirmation. */
+    suspend fun deleteAllRecordedDataForEveryone() {
+        dao.deleteAllForAllProfiles()
+    }
+
+    private fun activeProfileIdOrDefault(): String =
+        profileStore.activeProfileId() ?: DEFAULT_PROFILE_ID
 }

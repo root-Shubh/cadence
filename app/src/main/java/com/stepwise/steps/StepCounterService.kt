@@ -20,6 +20,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import com.stepwise.data.DEFAULT_PROFILE_ID
 import com.stepwise.data.ProfileState
 import com.stepwise.data.ProfileStore
 import com.stepwise.data.StepDatabase
@@ -184,12 +185,16 @@ class StepCounterService : Service(), SensorEventListener {
     private suspend fun addSteps(delta: Long) {
         val dateIso = StepDelta.dateIsoFor(System.currentTimeMillis(), ZoneId.systemDefault())
 
+        // Writes go to the active profile's history; "default" when no profile exists.
+        val state: ProfileState? = ProfileStore(applicationContext).load()
+        val profileId = state?.id ?: DEFAULT_PROFILE_ID
+
         val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
-        val current = dao.getByDate(dateIso)
+        val current = dao.getByDate(profileId, dateIso)
         val steps = ((current?.steps ?: 0).toLong() + delta)
             .coerceAtMost(Int.MAX_VALUE.toLong())
             .toInt()
-        dao.upsert(toEntity(dateIso, steps))
+        dao.upsert(toEntity(state, profileId, dateIso, steps))
 
         lastSteps = steps
         updateNotification(steps)
@@ -204,9 +209,9 @@ class StepCounterService : Service(), SensorEventListener {
     }
 
     /** Without a saved profile, steps are stored with zero distance and kcal. */
-    private fun toEntity(dateIso: String, steps: Int): StepDayEntity {
-        val profile = loadProfile()
-            ?: return StepDayEntity(dateIso, steps, 0.0, 0.0, 0.0, 0.0, 0.0)
+    private fun toEntity(state: ProfileState?, profileId: String, dateIso: String, steps: Int): StepDayEntity {
+        val profile = toDomainProfile(state)
+            ?: return StepDayEntity(dateIso, steps, 0.0, 0.0, 0.0, 0.0, 0.0, profileId)
         val m = computeDay(profile, steps)
         return StepDayEntity(
             dateIso = dateIso,
@@ -216,11 +221,12 @@ class StepCounterService : Service(), SensorEventListener {
             bmrKcal = m.bmrKcal,
             rmrKcal = m.rmrKcal,
             totalKcal = m.totalKcal,
+            profileId = profileId,
         )
     }
 
-    private fun loadProfile(): Profile? {
-        val state: ProfileState = ProfileStore(applicationContext).load() ?: return null
+    private fun toDomainProfile(state: ProfileState?): Profile? {
+        if (state == null) return null
         val sex = Sex.values().firstOrNull { it.name == state.sex } ?: return null
         return runCatching {
             Profile(state.heightCm, state.weightKg, state.age, sex, state.strideOverrideCm)

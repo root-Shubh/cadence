@@ -41,8 +41,8 @@ class StepDayDaoTest {
         dao.upsert(day("2026-03-01", 1000))
         dao.upsert(day("2026-03-01", 2000))
 
-        assertEquals(2000, dao.getByDate("2026-03-01")?.steps)
-        assertEquals(1, dao.getRange("2026-03-01", "2026-03-01").size)
+        assertEquals(2000, dao.getByDate(DEFAULT_PROFILE_ID, "2026-03-01")?.steps)
+        assertEquals(1, dao.getRange(DEFAULT_PROFILE_ID, "2026-03-01", "2026-03-01").size)
     }
 
     @Test
@@ -53,8 +53,17 @@ class StepDayDaoTest {
         dao.upsert(day("2026-02-28", 0))
         dao.upsert(day("2026-03-04", 4))
 
-        val rows = dao.getRange("2026-03-01", "2026-03-03")
+        val rows = dao.getRange(DEFAULT_PROFILE_ID, "2026-03-01", "2026-03-03")
 
         assertEquals(listOf("2026-03-01", "2026-03-02", "2026-03-03"), rows.map { it.dateIso })
+    }
+
+    @Test
+    fun sameDateForTwoProfilesIsTwoRows() = runBlocking {
+        dao.upsert(day("2026-03-01", 1))
+        dao.upsert(day("2026-03-01", 9).copy(profileId = "other"))
+
+        assertEquals(1, dao.getByDate(DEFAULT_PROFILE_ID, "2026-03-01")?.steps)
+        assertEquals(9, dao.getByDate("other", "2026-03-01")?.steps)
     }
 }
