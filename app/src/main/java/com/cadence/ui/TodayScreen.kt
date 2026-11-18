@@ -29,6 +29,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,7 +44,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.cadence.domain.DailyRecord
+import com.cadence.data.DEFAULT_PROFILE_ID
 import com.cadence.domain.DayMetrics
+import com.cadence.gps.GpsFix
+import com.cadence.gps.RouteRecording
 import com.cadence.goals.daysMonthToDate
 import com.cadence.goals.periodSummary
 import com.cadence.goals.stepsInLastDays
@@ -68,9 +73,22 @@ fun TodayScreen(
     isRecording: Boolean = trackingActive,
     notificationsOff: Boolean = false,
     onOpenNotificationSettings: () -> Unit = {},
+    routePoints: List<GpsFix> = emptyList(),
+    routeProfileId: String = DEFAULT_PROFILE_ID,
 ) {
     val steps = day?.steps
     val caloriesKnown = day != null && day.totalKcal > 0.0
+
+    // GPS route mapping follows the Record session only. It never changes the step count.
+    val context = LocalContext.current
+    LaunchedEffect(isRecording, routeProfileId) {
+        if (isRecording) {
+            RouteRecording.stop()
+            RouteRecording.start(context, routeProfileId)
+        } else {
+            RouteRecording.stop()
+        }
+    }
 
     Column(
         modifier = modifier
@@ -113,6 +131,7 @@ fun TodayScreen(
             Reveal(index = 3, modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     GoalCardsPager(
+                        routePoints = routePoints,
                         dailyCard = {
                             HeroStepCard(
                                 steps = steps,

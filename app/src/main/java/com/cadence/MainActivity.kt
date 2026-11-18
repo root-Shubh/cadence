@@ -38,6 +38,7 @@ import com.cadence.data.ProfileStore
 import com.cadence.data.StepDatabase
 import com.cadence.data.StepDayDao
 import com.cadence.data.StepDayEntity
+import com.cadence.gps.GpsFix
 import com.cadence.export.CsvDailyRow
 import com.cadence.export.mergeImported
 import com.cadence.export.parseDailyCsv
@@ -276,6 +277,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Today's GPS route points, for the route card. Map aid only; never counted as steps.
+                val routePoints by produceState<List<GpsFix>>(initialValue = emptyList(), today, activeId) {
+                    database.routePointDao().getDayFlow(activeId ?: DEFAULT_PROFILE_ID, today).collect { rows ->
+                        value = rows.map { GpsFix(it.lat, it.lon, it.accuracyM, it.timeMillis) }
+                    }
+                }
+
                 // Requests the activity-recognition permission, then starts the service.
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
@@ -343,6 +351,8 @@ class MainActivity : ComponentActivity() {
                                     monthlyGoal = eff.monthlySteps,
                                     history = history,
                                     trackingActive = trackingActive,
+                                    routePoints = routePoints,
+                                    routeProfileId = activeId ?: DEFAULT_PROFILE_ID,
                                     isRecording = trackingActive,
                                     onToggleRecording = toggleRecording,
                                     notificationsOff = notificationsOff,
