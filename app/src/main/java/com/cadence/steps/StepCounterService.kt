@@ -107,6 +107,11 @@ class StepCounterService : Service(), SensorEventListener {
     private var locationListener: LocationListener? = null
     private var lastPlan: ServicePlan? = null
 
+    // Notification helpers. Main thread only.
+    private var lastNotifiedSteps: Int? = null
+    private var ringPercent: Int = -1
+    private var ringIcon: android.graphics.Bitmap? = null
+
     /** True from a vehicle start until counting resumes: the step sources are off. */
     private var vehiclePaused = false
 
@@ -790,15 +795,16 @@ class StepCounterService : Service(), SensorEventListener {
         ) {
             return
         }
+        // Rebuild only when the count actually moved; the flow already limits this to once a second.
+        if (steps == lastNotifiedSteps) return
+        lastNotifiedSteps = steps
         NotificationManagerCompat.from(this).notify(NOTIFICATION_ID, buildNotification(steps))
     }
 
     private fun buildNotification(steps: Int, sensorFree: Boolean = this.sensorFree): Notification {
         val goal = dailyGoalOrNull()
-        val target = goal ?: DEFAULT_DAILY_GOAL
-        val percent = if (target > 0) (steps * 100L / target).toInt().coerceIn(0, 100) else 0
-        val stepsText = String.format(java.util.Locale.ROOT, "%,d", steps)
-        val goalText = String.format(java.util.Locale.ROOT, "%,d", target)
+        val lines = notificationLines(steps, goal ?: 0)
+        val color = androidx.core.content.ContextCompat.getColor(this, com.cadence.R.color.brand_primary)
         val open = android.app.PendingIntent.getActivity(
             this,
             0,
@@ -806,15 +812,20 @@ class StepCounterService : Service(), SensorEventListener {
                 .addFlags(android.content.Intent.FLAG_ACTIVITY_SINGLE_TOP),
             android.app.PendingIntent.FLAG_IMMUTABLE or android.app.PendingIntent.FLAG_UPDATE_CURRENT,
         )
-        val summary = if (goal == null) "$goalText steps (default goal)" else "$goalText steps goal"
+        val bigText = listOfNotNull(
+            lines.text + if (goal == null) " (default goal)" else "",
+            lines.remainingLine,
+            if (sensorFree) "Counting from the accelerometer" else null,
+        ).joinToString("\n")
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(com.cadence.R.drawable.ic_launcher_monochrome)
-            .setColor(androidx.core.content.ContextCompat.getColor(this, com.cadence.R.color.brand_primary))
-            .setContentTitle("$stepsText steps today")
-            .setContentText("$percent% of $summary")
+            .setColor(color)
+            .setLargeIcon(ringIconFor(lines.percent, color))
+            .setContentTitle(lines.title)
+            .setContentText(lines.text)
             .setSubText(if (sensorFree) "Sensor-free counting" else "Cadence")
-            .setStyle(NotificationCompat.BigTextStyle().bigText("$percent% of $summary" + if (sensorFree) " · counting from the accelerometer" else ""))
-            .setProgress(target, progressFor(steps, target), false)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
+            .setProgress(lines.goal, progressFor(steps, lines.goal), false)
             .setContentIntent(open)
             .setShowWhen(false)
             .setPriority(NotificationCompat.PRIORITY_LOW)
@@ -824,6 +835,15 @@ class StepCounterService : Service(), SensorEventListener {
             .build()
     }
 
+
+    /** Ring icon for [percent], regenerated only when the whole percent changes. */
+    private fun ringIconFor(percent: Int, color: Int): android.graphics.Bitmap {
+        ringIcon?.takeIf { percent == ringPercent }?.let { return it }
+        val bitmap = buildRingIcon(percent, color)
+        ringPercent = percent
+        ringIcon = bitmap
+        return bitmap
+    }
 
     /** The daily goal from the goals prefs, or null when none is set. Never throws. */
     private fun dailyGoalOrNull(): Int? = runCatching {
