@@ -119,23 +119,14 @@ fun CalibrateScreen(
         onDispose { locationManager.removeUpdates(listener) }
     }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestMultiplePermissions(),
-    ) { results ->
-        val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
-            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
-        permissionDenied = !granted
-        pendingStart = granted
-    }
-
-    // The single place that decides whether a requested walk can start: it needs
-    // location permission and GPS. Runs when a start is requested and on every resume.
-    LaunchedEffect(pendingStart, resumeCount) {
-        if (!pendingStart) return@LaunchedEffect
+    // The single place that decides whether a walk can start: it needs location permission
+    // and GPS. It runs straight from Start, so the GPS dialog shows on that tap, and again when
+    // the permission answer, a resume or a GPS change arrives while a start is pending.
+    fun tryStart() {
         if (!hasLocationPermission(context)) {
             pendingStart = false
             permissionDenied = true
-            return@LaunchedEffect
+            return
         }
         if (isGpsEnabled(locationManager)) {
             pendingStart = false
@@ -147,8 +138,41 @@ fun CalibrateScreen(
             message = null
             walking = true
         } else {
+            pendingStart = true
             showGpsDialog = true
         }
+    }
+
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions(),
+    ) { results ->
+        val granted = results[Manifest.permission.ACCESS_FINE_LOCATION] == true ||
+            results[Manifest.permission.ACCESS_COARSE_LOCATION] == true
+        permissionDenied = !granted
+        if (granted) tryStart()
+    }
+
+    // Location permission first, then the GPS check. Called after the notification answer.
+    fun beginLocationStart() {
+        if (hasLocationPermission(context)) {
+            permissionDenied = false
+            tryStart()
+        } else {
+            permissionLauncher.launch(
+                arrayOf(
+                    Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION,
+                ),
+            )
+        }
+    }
+
+    // Asks for the notification permission before the walk starts (Android 13+).
+    val requestNotifications = rememberNotificationRequest { beginLocationStart() }
+
+    // Re-check a pending start when the user comes back from location settings.
+    LaunchedEffect(resumeCount) {
+        if (pendingStart) tryStart()
     }
 
     // Listen for location on/off changes while a walk runs or is paused.
@@ -183,6 +207,8 @@ fun CalibrateScreen(
             gpsPaused = false
             startSteps = currentSteps() - pausedSteps
             walking = true
+        } else if (pendingStart && enabled) {
+            tryStart()
         }
     }
 
@@ -330,17 +356,7 @@ fun CalibrateScreen(
                     onClick = {
                         message = null
                         gpsPaused = false
-                        if (hasLocationPermission(context)) {
-                            permissionDenied = false
-                            pendingStart = true
-                        } else {
-                            permissionLauncher.launch(
-                                arrayOf(
-                                    Manifest.permission.ACCESS_FINE_LOCATION,
-                                    Manifest.permission.ACCESS_COARSE_LOCATION,
-                                ),
-                            )
-                        }
+                        requestNotifications()
                     },
                     modifier = Modifier
                         .fillMaxWidth()

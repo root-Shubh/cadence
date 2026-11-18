@@ -110,6 +110,9 @@ class StepCounterService : Service(), SensorEventListener {
     private var lastWriteMillis = 0L
     private var lastWidgetBroadcastMillis = 0L
 
+    /** Set when the app is swiped away: the next consumer pass stores pending steps at once. */
+    @Volatile private var forceFlush = false
+
     override fun onCreate() {
         super.onCreate()
         createChannel()
@@ -123,7 +126,9 @@ class StepCounterService : Service(), SensorEventListener {
             for (ignored in wakeups) {
                 try {
                     val now = System.currentTimeMillis()
-                    if (isDirty() && shouldWriteNow(lastWriteMillis, now)) flush(now)
+                    val force = forceFlush
+                    forceFlush = false
+                    if (isDirty() && (force || shouldWriteNow(lastWriteMillis, now))) flush(now)
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
@@ -196,6 +201,19 @@ class StepCounterService : Service(), SensorEventListener {
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
+
+    /**
+     * The app was swiped away from recents. Counting keeps going: the foreground service and
+     * its notification stay up, so the service is not stopped here. Pending steps are stored
+     * now, so the swipe loses nothing.
+     */
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        if (started && !destroyed) {
+            forceFlush = true
+            wakeups.trySend(Unit)
+        }
+        super.onTaskRemoved(rootIntent)
+    }
 
     override fun onSensorChanged(event: SensorEvent) {
         if (event.sensor.type != Sensor.TYPE_STEP_COUNTER) return

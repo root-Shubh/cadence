@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -73,6 +74,8 @@ fun TodayScreen(
     endDate: LocalDate = LocalDate.now(),
     onToggleRecording: () -> Unit = {},
     isRecording: Boolean = trackingActive,
+    notificationsOff: Boolean = false,
+    onOpenNotificationSettings: () -> Unit = {},
 ) {
     val steps = day?.steps
     val caloriesKnown = day != null && day.totalKcal > 0.0
@@ -127,6 +130,26 @@ fun TodayScreen(
                         isRecording = isRecording,
                         onToggleRecording = onToggleRecording,
                     )
+                    if (notificationsOff) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        ) {
+                            Text(
+                                text = "Notifications are off, so the step count is not shown in the tray. " +
+                                    "Turn them on in settings.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f),
+                            )
+                            TextButton(
+                                onClick = onOpenNotificationSettings,
+                                modifier = Modifier.heightIn(min = 48.dp),
+                            ) {
+                                Text("Notification settings")
+                            }
+                        }
+                    }
                     countingStatusText?.let {
                         Text(
                             text = it,
