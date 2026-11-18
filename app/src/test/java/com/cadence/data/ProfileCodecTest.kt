@@ -60,13 +60,13 @@ class ProfileCodecTest {
     fun corruptInputReturnsEmptyListWithoutThrowing() {
         val corrupt = listOf(
             "not a profile list at all",
-            "stepwise-profiles-v1\na|Me|abc|70|30||",
-            "stepwise-profiles-v1\na|Me|170.0|70.0|30|MALE",
-            "stepwise-profiles-v1\na|Me|170.0|70.0|30|MALE|\\q",
-            "stepwise-profiles-v1\na|Me|170.0|70.0|30|MALE|\\",
-            "stepwise-profiles-v1\na|Me|170.0|70.0|30|MALE|\nb|Me|170.0|70.0|30|MALE",
-            "stepwise-profiles-v1\n|Me|170.0|70.0|30|MALE|",
-            "stepwise-profiles-v1\na|Me|170.0|70.0|30|MALE|\n\u0000garbage",
+            "cadence-profiles-v1\na|Me|abc|70|30||",
+            "cadence-profiles-v1\na|Me|170.0|70.0|30|MALE",
+            "cadence-profiles-v1\na|Me|170.0|70.0|30|MALE|\\q",
+            "cadence-profiles-v1\na|Me|170.0|70.0|30|MALE|\\",
+            "cadence-profiles-v1\na|Me|170.0|70.0|30|MALE|\nb|Me|170.0|70.0|30|MALE",
+            "cadence-profiles-v1\n|Me|170.0|70.0|30|MALE|",
+            "cadence-profiles-v1\na|Me|170.0|70.0|30|MALE|\n\u0000garbage",
         )
         for (raw in corrupt) {
             assertTrue("should be empty for: $raw", ProfileCodec.decode(raw).isEmpty())

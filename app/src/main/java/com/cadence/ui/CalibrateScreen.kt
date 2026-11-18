@@ -549,6 +549,11 @@ fun CalibrateScreen(
             PermissionsPanel()
         }
 
+        // Troubleshooting, collapsed until opened, with clear space above it.
+        Reveal(index = 6, modifier = Modifier.fillMaxWidth().padding(top = 24.dp)) {
+            DebugPanel(modifier = Modifier.fillMaxWidth())
+        }
+
         Reveal(index = 7, modifier = Modifier.fillMaxWidth()) {
             Text(
                 "GPS works offline. No location or step data is sent anywhere.",

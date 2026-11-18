@@ -14,5 +14,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "stepwise"
+rootProject.name = "cadence"
 include(":app")

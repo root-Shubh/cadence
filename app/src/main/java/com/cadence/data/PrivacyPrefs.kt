@@ -36,7 +36,7 @@ class PrivacyPrefs(context: Context) {
     }
 
     private companion object {
-        const val PREFS_NAME = "stepwise_privacy"
+        const val PREFS_NAME = "cadence_privacy"
         const val KEY_ACK = "notice_acknowledged"
     }
 }

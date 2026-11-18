@@ -40,7 +40,7 @@ abstract class StepDatabase : RoomDatabase() {
     abstract fun stepDayDao(): StepDayDao
 
     companion object {
-        private const val DB_NAME = "stepwise.db"
+        private const val DB_NAME = "cadence.db"
 
         @Volatile
         private var INSTANCE: StepDatabase? = null

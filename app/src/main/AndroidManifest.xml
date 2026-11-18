@@ -8,13 +8,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_HEALTH" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <application
         android:icon="@mipmap/ic_launcher"
         android:label="Cadence"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Stepwise.Starting">
+        android:theme="@style/Theme.Cadence.Starting">
 
         <activity
             android:name=".MainActivity"
@@ -61,6 +62,16 @@
         <receiver
             android:name=".widget.StepControlReceiver"
             android:exported="false" />
+
+        <!-- Restarts counting after a reboot or an app update when the user had it on. -->
+        <receiver
+            android:name=".steps.BootReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <service
             android:name=".steps.StepCounterService"

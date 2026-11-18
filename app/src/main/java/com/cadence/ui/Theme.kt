@@ -72,7 +72,7 @@ private val DarkScheme: ColorScheme = darkColorScheme(
     outlineVariant = argb(DarkPalette.outlineVariant),
 )
 
-private val StepwiseTypography = Typography(
+private val CadenceTypography = Typography(
     displayLarge = TextStyle(fontWeight = FontWeight.Bold, fontSize = 56.sp, lineHeight = 64.sp),
     headlineSmall = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 24.sp, lineHeight = 32.sp),
     titleLarge = TextStyle(fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp),
@@ -86,7 +86,7 @@ private val StepwiseTypography = Typography(
 )
 
 /** Cards use [Shapes.medium] (16 dp); buttons use [Shapes.extraLarge] (28 dp) as a pill. */
-private val StepwiseShapes = Shapes(
+private val CadenceShapes = Shapes(
     extraSmall = RoundedCornerShape(8.dp),
     small = RoundedCornerShape(12.dp),
     medium = RoundedCornerShape(16.dp),
@@ -95,18 +95,18 @@ private val StepwiseShapes = Shapes(
 )
 
 /**
- * Stepwise Material3 theme. [darkTheme] defaults to the system setting; MainActivity passes
+ * Cadence Material3 theme. [darkTheme] defaults to the system setting; MainActivity passes
  * the user's System/Light/Dark choice.
  */
 @Composable
-fun StepwiseTheme(
+fun CadenceTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
         colorScheme = if (darkTheme) DarkScheme else LightScheme,
-        typography = StepwiseTypography,
-        shapes = StepwiseShapes,
+        typography = CadenceTypography,
+        shapes = CadenceShapes,
         content = content,
     )
 }

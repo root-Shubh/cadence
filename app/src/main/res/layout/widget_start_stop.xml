@@ -1,31 +1,49 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Start/stop: an icon and the action, with today's steps under it. Background and colours switch
+     between the stopped (accent) and counting (warm) states in code. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_button_background"
+    android:clipToOutline="true"
     android:gravity="center"
     android:orientation="horizontal"
-    android:paddingStart="8dp"
-    android:paddingEnd="8dp">
+    android:paddingStart="@dimen/widget_padding"
+    android:paddingEnd="@dimen/widget_padding">
 
-    <TextView
-        android:id="@+id/widget_action"
+    <ImageView
+        android:id="@+id/widget_icon"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:contentDescription="@null"
+        android:src="@drawable/ic_widget_play" />
+
+    <LinearLayout
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:maxLines="1"
-        android:textColor="@android:color/white"
-        android:textSize="18sp"
-        android:textStyle="bold" />
+        android:layout_marginStart="10dp"
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/widget_steps"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:textColor="@android:color/white"
-        android:textSize="13sp" />
+        <TextView
+            android:id="@+id/widget_action"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:fontFamily="sans-serif-medium"
+            android:maxLines="1"
+            android:text="@string/widget_action_start"
+            android:textColor="@color/widget_accent_on"
+            android:textSize="17sp" />
+
+        <TextView
+            android:id="@+id/widget_steps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:alpha="0.85"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="@color/widget_accent_on"
+            android:textSize="13sp" />
+    </LinearLayout>
 
 </LinearLayout>

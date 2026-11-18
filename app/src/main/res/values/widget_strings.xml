@@ -7,6 +7,7 @@
     <string name="widget_action_start">Start</string>
     <string name="widget_action_stop">Stop</string>
     <string name="widget_steps_short">%1$s steps</string>
+    <string name="widget_goals_title">Goals</string>
     <string name="widget_goals_daily">Daily</string>
     <string name="widget_goals_weekly">Weekly</string>
     <string name="widget_goals_monthly">Monthly</string>

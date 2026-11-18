@@ -24,6 +24,18 @@ object StepDelta {
         return if (currentRaw >= lastRaw) currentRaw - lastRaw else currentRaw
     }
 
+    /**
+     * Steps to add to the counter total for one TYPE_STEP_COUNTER reading.
+     *
+     * - [lastRaw] null: this is the first reading of a session, so it becomes the baseline. The
+     *   raw value also holds steps from before counting started, so none of it is added. Only
+     *   [lead], the detector steps seen since counting started and before this reading, is
+     *   credited, because those steps are inside the reading.
+     * - Otherwise: the difference from [lastRaw], as [nextDelta].
+     */
+    fun counterDelta(lastRaw: Long?, currentRaw: Long, lead: Long): Long =
+        if (lastRaw == null) lead.coerceAtLeast(0L) else nextDelta(lastRaw, currentRaw)
+
     /** Local calendar day for [epochMillis] in [zone], formatted as yyyy-MM-dd. */
     fun dateIsoFor(epochMillis: Long, zone: ZoneId): String =
         Instant.ofEpochMilli(epochMillis).atZone(zone).toLocalDate().format(DAY_FORMAT)

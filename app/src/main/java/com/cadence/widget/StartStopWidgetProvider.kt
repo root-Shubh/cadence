@@ -7,6 +7,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.widget.RemoteViews
+import androidx.core.content.ContextCompat
 import com.cadence.R
 import com.cadence.ui.Destination
 import kotlinx.coroutines.CoroutineScope
@@ -59,6 +60,22 @@ class StartStopWidgetProvider : AppWidgetProvider() {
                 R.id.widget_steps,
                 context.getString(R.string.widget_steps_short, widgetStepsText(steps)),
             )
+            // Counting shows a warm Stop button; stopped shows the accent Start button.
+            val onColor = ContextCompat.getColor(
+                context,
+                if (counting) R.color.widget_stop_on else R.color.widget_accent_on,
+            )
+            views.setInt(
+                R.id.widget_root,
+                "setBackgroundResource",
+                if (counting) R.drawable.widget_button_stop_background else R.drawable.widget_button_background,
+            )
+            views.setImageViewResource(
+                R.id.widget_icon,
+                if (counting) R.drawable.ic_widget_stop else R.drawable.ic_widget_play,
+            )
+            views.setTextColor(R.id.widget_action, onColor)
+            views.setTextColor(R.id.widget_steps, onColor)
             views.setOnClickPendingIntent(R.id.widget_root, clickIntent(context, canToggle))
             return views
         }

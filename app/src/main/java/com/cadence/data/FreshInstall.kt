@@ -6,16 +6,16 @@ import com.cadence.steps.LiveSteps
 import com.cadence.steps.setCountingOn
 import java.io.File
 
-private const val TAG = "StepwiseReset"
+private const val TAG = "CadenceReset"
 
 /** SharedPreferences files that hold app state. A fresh install has none of them. */
 fun freshInstallPrefFiles(): List<String> = listOf(
-    "stepwise_profile",
-    "stepwise_goals",
-    "stepwise_theme",
-    "stepwise_privacy",
-    "stepwise_onboarding",
-    "stepwise_tracker",
+    "cadence_profile",
+    "cadence_goals",
+    "cadence_theme",
+    "cadence_privacy",
+    "cadence_onboarding",
+    "cadence_tracker",
 )
 
 /**

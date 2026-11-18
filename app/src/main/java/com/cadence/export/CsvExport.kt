@@ -46,10 +46,10 @@ fun buildDailyCsv(rows: List<CsvDailyRow>): String {
     return sb.toString()
 }
 
-/** Returns "stepwise-export-<todayIso>.csv". Throws IllegalArgumentException for an invalid date. */
+/** Returns "cadence-export-<todayIso>.csv". Throws IllegalArgumentException for an invalid date. */
 fun csvFileName(todayIso: String): String {
     requireIsoDate(todayIso)
-    return "stepwise-export-$todayIso.csv"
+    return "cadence-export-$todayIso.csv"
 }
 
 private fun requireIsoDate(value: String) {

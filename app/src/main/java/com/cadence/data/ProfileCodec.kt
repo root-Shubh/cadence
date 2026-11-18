@@ -6,7 +6,7 @@ const val DEFAULT_PROFILE_ID = "default"
 /** Longest allowed profile name, in characters after trimming. */
 const val MAX_PROFILE_NAME_LENGTH = 30
 
-private const val HEADER = "stepwise-profiles-v1"
+private const val HEADER = "cadence-profiles-v1"
 private const val FIELD_COUNT = 7
 private const val SEP = '|'
 private const val RECORD_SEP = '\n'

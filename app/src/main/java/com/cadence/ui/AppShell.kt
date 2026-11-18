@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.automirrored.filled.DirectionsWalk
+import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Straighten
 import androidx.compose.material3.Icon
@@ -34,6 +35,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 enum class Destination(val label: String, val glyph: String) {
     TODAY("Today", "T"),
     TREND("Trend", "~"),
+    PATTERN("Pattern", "D"),
     PROFILE("Profile", "P"),
     CALIBRATE("Calibrate", "C"),
 }
@@ -41,6 +43,7 @@ enum class Destination(val label: String, val glyph: String) {
 private fun Destination.icon(): ImageVector = when (this) {
     Destination.TODAY -> Icons.AutoMirrored.Filled.DirectionsWalk
     Destination.TREND -> Icons.AutoMirrored.Filled.TrendingUp
+    Destination.PATTERN -> Icons.Filled.Explore
     Destination.PROFILE -> Icons.Filled.Person
     Destination.CALIBRATE -> Icons.Filled.Straighten
 }
@@ -49,6 +52,7 @@ private fun Destination.icon(): ImageVector = when (this) {
 private fun Destination.tone(): Tone = when (this) {
     Destination.TODAY -> Tone.PRIMARY
     Destination.TREND -> Tone.TERTIARY
+    Destination.PATTERN -> Tone.SECONDARY
     Destination.PROFILE -> Tone.SECONDARY
     Destination.CALIBRATE -> Tone.PRIMARY
 }

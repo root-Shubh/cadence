@@ -9,12 +9,12 @@ class FreshInstallTest {
     fun freshInstallPrefFilesListsAllSixStateFiles() {
         val files = freshInstallPrefFiles()
         listOf(
-            "stepwise_profile",
-            "stepwise_goals",
-            "stepwise_theme",
-            "stepwise_privacy",
-            "stepwise_onboarding",
-            "stepwise_tracker",
+            "cadence_profile",
+            "cadence_goals",
+            "cadence_theme",
+            "cadence_privacy",
+            "cadence_onboarding",
+            "cadence_tracker",
         ).forEach { assertTrue("missing $it", files.contains(it)) }
     }
 }

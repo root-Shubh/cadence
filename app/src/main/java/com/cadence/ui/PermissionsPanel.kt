@@ -49,7 +49,7 @@ import com.cadence.steps.notificationPermissionGranted
 private const val ASKED_PREFS = "permission_prompts"
 
 /**
- * Card listing the permissions Stepwise uses, with a status and a button for each. Statuses are
+ * Card listing the permissions Cadence uses, with a status and a button for each. Statuses are
  * read again on every ON_RESUME, so a change made in system settings shows when the user returns.
  */
 @Composable
