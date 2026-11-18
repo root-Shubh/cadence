@@ -46,6 +46,8 @@ class StepsWidgetProvider : AppWidgetProvider() {
                     appWidgetManager.updateAppWidget(id, buildViews(appContext, fallback))
                 }
             } finally {
+                // This update comes from the step service, so the other widgets follow the steps too.
+                runCatching { refreshStepDependentWidgetsIfDue(appContext) }
                 pending.finish()
             }
         }

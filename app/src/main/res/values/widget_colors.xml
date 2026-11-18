@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_ring_progress">#1B7F6B</color>
+    <color name="widget_ring_track">#D5E9E3</color>
+    <color name="widget_text_primary">#16302A</color>
+    <color name="widget_text_secondary">#4A6661</color>
+</resources>
