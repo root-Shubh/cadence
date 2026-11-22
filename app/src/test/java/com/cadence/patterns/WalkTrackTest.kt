@@ -61,7 +61,7 @@ class WalkTrackTest {
         repeat(3) { LiveTrack.onStep(day, it.toLong(), 0.0, 1.0) } // north 3 m
         repeat(2) { LiveTrack.onStep(day, 10L + it, PI / 2, 1.0) } // east 2 m
 
-        val points = LiveTrack.points.value
+        val points = LiveTrack.snapshot()
         assertEquals(6, points.size) // start point plus five steps
         val last = points.last()
         near(2.0, last.x)
@@ -75,8 +75,8 @@ class WalkTrackTest {
         LiveTrack.onStep(day, 0L, 0.0, 1.0)
         LiveTrack.setPenDown(false)
         LiveTrack.onStep(day, 1L, 0.0, 1.0)
-        assertFalse(LiveTrack.points.value.last().pen)
-        near(2.0, LiveTrack.points.value.last().y)
+        assertFalse(LiveTrack.snapshot().last().pen)
+        near(2.0, LiveTrack.snapshot().last().y)
     }
 
     @Test
@@ -86,7 +86,7 @@ class WalkTrackTest {
         LiveTrack.newDrawing()
         LiveTrack.onStep(day, 5L, 0.0, 1.0)
 
-        val latest = latestDrawing(LiveTrack.points.value)
+        val latest = latestDrawing(LiveTrack.snapshot())
         assertEquals(2, latest.size)
         near(0.0, latest.first().y)
         near(1.0, latest.last().y)
@@ -96,10 +96,10 @@ class WalkTrackTest {
     @Test
     fun stepWithoutHeadingIsSkippedAndNewDayStartsEmpty() {
         LiveTrack.onStep("2026-11-19", 0L, null, 1.0)
-        assertTrue(LiveTrack.points.value.isEmpty())
+        assertTrue(LiveTrack.snapshot().isEmpty())
         LiveTrack.onStep("2026-11-19", 1L, 0.0, 1.0)
         LiveTrack.onStep("2026-11-20", 2L, 0.0, 1.0)
-        assertEquals(2, LiveTrack.points.value.size)
+        assertEquals(2, LiveTrack.snapshot().size)
         assertEquals("2026-11-20", LiveTrack.day())
     }
 
@@ -164,5 +164,60 @@ class WalkTrackTest {
         assertEquals(listOf(a, b), store.read("me", "2026-11-19"))
         assertEquals(listOf("2026-11-19"), store.listDates("me"))
         assertTrue(store.read("me", "2026-11-18").isEmpty())
+    }
+
+    /** Regression for STEPW-64: a step must not copy the drawing, and a snapshot must not change later. */
+    @Test
+    fun stepsBumpTheVersionAndSnapshotsStayFixed() {
+        val day = "2026-11-22"
+        val before = LiveTrack.version.value
+        LiveTrack.onStep(day, 0L, 0.0, 1.0)
+        val snap = LiveTrack.snapshot()
+        LiveTrack.onStep(day, 1L, 0.0, 1.0)
+        assertTrue(LiveTrack.version.value > before)
+        assertEquals(2, snap.size)
+        assertEquals(3, LiveTrack.snapshot().size)
+    }
+
+    @Test
+    fun smoothingFlattensAZigzagAndKeepsTheEnds() {
+        // Walking north with the compass wobbling 0.3 m left and right on every step.
+        val zigzag = (0..20).map { i -> TrackPoint(i.toLong(), if (i % 2 == 0) 0.3 else -0.3, i.toDouble(), pen = i > 0, drawing = 0) }
+        val smooth = smoothForDisplay(zigzag)
+        assertEquals(zigzag.size, smooth.size)
+        assertEquals(zigzag.first(), smooth.first())
+        assertEquals(zigzag.last(), smooth.last())
+        val wobble = smooth.drop(2).dropLast(2).maxOf { abs(it.x) }
+        assertTrue("wobble $wobble", wobble < 0.1)
+    }
+
+    @Test
+    fun smoothingLeavesPenUpMovesAlone() {
+        val pts = listOf(
+            TrackPoint(0, 0.0, 0.0, pen = false, drawing = 0),
+            TrackPoint(1, 0.0, 1.0, pen = true, drawing = 0),
+            TrackPoint(2, 0.0, 2.0, pen = false, drawing = 0),
+            TrackPoint(3, 5.0, 2.0, pen = false, drawing = 0),
+        )
+        assertEquals(pts, smoothForDisplay(pts))
+    }
+
+    /** A long walk draws as a few hundred segments, not one per step. */
+    @Test
+    fun segmentsThinALongWalkAndKeepPenChanges() {
+        val pts = ArrayList<TrackPoint>()
+        pts.add(TrackPoint(0, 0.0, 0.0, pen = false, drawing = 0))
+        for (i in 1..5_000) pts.add(TrackPoint(i.toLong(), kotlin.math.sin(i / 200.0) * 50, i * 0.1, pen = true, drawing = 0))
+        pts.add(TrackPoint(5_001, 80.0, 500.0, pen = false, drawing = 0))
+        val segments = drawingSegments(pts, width = 1_000f, height = 1_000f, padding = 36f)
+        assertEquals(listOf(true, false), segments.map { it.pen })
+        assertTrue("drawn ${segments[0].points.size}", segments[0].points.size < 1_500)
+        assertEquals(2, segments[1].points.size)
+    }
+
+    @Test
+    fun drawingSizeIsTheBoundingBox() {
+        val pts = listOf(TrackPoint(0, -2.0, 1.0, false, 0), TrackPoint(1, 3.0, 4.0, true, 0))
+        assertEquals(5.0 to 3.0, drawingSizeMeters(pts))
     }
 }
