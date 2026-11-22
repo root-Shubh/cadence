@@ -38,4 +38,24 @@ interface StepDayDao {
     /** Deletes every profile's history. Used only by the all-profiles reset. */
     @Query("DELETE FROM step_days")
     suspend fun deleteAllForAllProfiles()
+
+    // Steps by time of day (STEPW-63). Deleted together with the day rows by [DataReset].
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertSlots(slots: List<StepSlotEntity>)
+
+    @Query("SELECT * FROM step_slots WHERE profileId = :profileId AND dateIso = :dateIso")
+    suspend fun getSlots(profileId: String, dateIso: String): List<StepSlotEntity>
+
+    @Query(
+        "SELECT * FROM step_slots WHERE profileId = :profileId AND dateIso BETWEEN :fromIso AND :toIso " +
+            "ORDER BY dateIso ASC, slot ASC",
+    )
+    fun getSlotsFlow(profileId: String, fromIso: String, toIso: String): Flow<List<StepSlotEntity>>
+
+    @Query("DELETE FROM step_slots WHERE profileId = :profileId")
+    suspend fun deleteSlots(profileId: String)
+
+    @Query("DELETE FROM step_slots")
+    suspend fun deleteSlotsForAllProfiles()
 }

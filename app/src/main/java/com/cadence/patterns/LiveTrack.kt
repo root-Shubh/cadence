@@ -11,6 +11,10 @@ import kotlinx.coroutines.flow.asStateFlow
  * Each step moves the pen one stride in the current heading. With the pen up the step moves the
  * pen without drawing, so letters can be written. [newDrawing] starts a fresh drawing at 0, 0.
  * Points not yet saved are kept for [drainPending].
+ *
+ * Points live in one growing list that is never copied per step (STEPW-64: copying the whole list
+ * on every step made long walks stutter). A step only bumps [version]; readers take a [snapshot]
+ * when they redraw, at their own pace.
  */
 object LiveTrack {
     private val lock = Any()
@@ -18,10 +22,19 @@ object LiveTrack {
     private var drawing = 0
     private var pending = ArrayList<TrackPoint>()
 
-    private val _points = MutableStateFlow<List<TrackPoint>>(emptyList())
+    private val all = ArrayList<TrackPoint>()
 
-    /** Today's points, all drawings, oldest first. */
-    val points: StateFlow<List<TrackPoint>> = _points.asStateFlow()
+    private val _version = MutableStateFlow(0L)
+
+    /** Changes whenever the points change. Read the points with [snapshot]. */
+    val version: StateFlow<Long> = _version.asStateFlow()
+
+    /** Today's points, all drawings, oldest first. A copy: callers should not take it per step. */
+    fun snapshot(): List<TrackPoint> = synchronized(lock) { ArrayList(all) }
+
+    private fun changed() {
+        _version.value = _version.value + 1
+    }
 
     private val _penDown = MutableStateFlow(true)
 
@@ -33,11 +46,13 @@ object LiveTrack {
 
     /** Replaces the state with the saved points of [forDay], for example when counting starts. */
     fun load(forDay: String, saved: List<TrackPoint>) = synchronized(lock) {
-        if (day == forDay && _points.value.size >= saved.size) return@synchronized
+        if (day == forDay && all.size >= saved.size) return@synchronized
         day = forDay
         drawing = saved.maxOfOrNull { it.drawing } ?: 0
         pending = ArrayList()
-        _points.value = saved
+        all.clear()
+        all.addAll(saved)
+        changed()
     }
 
     /**
@@ -50,16 +65,17 @@ object LiveTrack {
             day = forDay
             drawing = 0
             pending = ArrayList()
-            _points.value = emptyList()
+            all.clear()
+            changed()
         }
         if (headingRad == null || !strideM.isFinite() || strideM <= 0.0) return@synchronized
-        val current = _points.value
-        val last = current.lastOrNull { it.drawing == drawing }
+        val last = all.lastOrNull { it.drawing == drawing }
         val added = ArrayList<TrackPoint>(2)
         val from = last ?: TrackPoint(timeMillis, 0.0, 0.0, pen = false, drawing = drawing).also { added.add(it) }
         added.add(stepFrom(from, headingRad, strideM, timeMillis, _penDown.value))
         pending.addAll(added)
-        _points.value = current + added
+        all.addAll(added)
+        changed()
     }
 
     fun setPenDown(down: Boolean) {
@@ -68,7 +84,7 @@ object LiveTrack {
 
     /** The next step starts a new drawing at 0, 0. Does nothing when the current drawing is empty. */
     fun newDrawing() = synchronized(lock) {
-        if (_points.value.any { it.drawing == drawing }) drawing++
+        if (all.any { it.drawing == drawing }) drawing++
     }
 
     /** Points added since the last call, for saving. */
@@ -88,7 +104,8 @@ object LiveTrack {
         day = null
         drawing = 0
         pending = ArrayList()
-        _points.value = emptyList()
+        all.clear()
+        changed()
         _penDown.value = true
     }
 }
