@@ -73,6 +73,7 @@ fun TrendScreen(
     modifier: Modifier = Modifier,
     dailyGoal: Int? = null,
     weeklyGoal: Int? = null,
+    hourlyDays: List<Pair<LocalDate, Map<Int, Int>>> = emptyList(),
 ) {
     var windowDays by remember { mutableStateOf(WEEK_DAYS) }
     val insights = remember(history, endDate, dailyGoal, weeklyGoal) {
@@ -133,6 +134,8 @@ fun TrendScreen(
                         goalPerDay = goalPerDay,
                     )
                 }
+
+                if (hourlyDays.isNotEmpty()) HourlyHeatmapCard(days = hourlyDays)
 
                 InsightsSection(insights = insights)
             }

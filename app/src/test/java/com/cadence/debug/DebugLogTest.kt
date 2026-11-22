@@ -126,4 +126,14 @@ class DebugLogTest {
 
         assertEquals("", File(dir, DebugLog.FILE_NAME).readText())
     }
+
+    /** Regression for STEPW-61: the log must hold a full day of one-a-minute heartbeats. */
+    @Test
+    fun capacityHoldsADayOfHeartbeats() {
+        val heartbeatsPerDay = 24 * 60
+        assertTrue(DebugLog.DEFAULT_CAPACITY >= heartbeatsPerDay * 2)
+        repeat(heartbeatsPerDay) { DebugLog.add("heartbeat", "alive $it", nowMillis = it * 60_000L) }
+        assertEquals(heartbeatsPerDay, DebugLog.lines().size)
+        assertTrue(DebugLog.lines().first().endsWith("alive 0"))
+    }
 }

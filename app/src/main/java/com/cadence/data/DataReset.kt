@@ -20,12 +20,15 @@ class DataReset(
 
     /** Removes all recorded step days of the active profile only. Profiles are kept. */
     suspend fun deleteAllRecordedData() {
-        dao.deleteAll(activeProfileIdOrDefault())
+        val id = activeProfileIdOrDefault()
+        dao.deleteAll(id)
+        dao.deleteSlots(id)
     }
 
     /** Removes recorded step days of every profile. Only for a second, explicit confirmation. */
     suspend fun deleteAllRecordedDataForEveryone() {
         dao.deleteAllForAllProfiles()
+        dao.deleteSlotsForAllProfiles()
     }
 
     private fun activeProfileIdOrDefault(): String =
