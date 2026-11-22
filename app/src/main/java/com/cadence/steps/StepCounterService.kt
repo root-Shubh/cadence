@@ -123,6 +123,16 @@ class StepCounterService : Service(), SensorEventListener {
     /** True from a vehicle start until counting resumes: the step sources are off. */
     private var vehiclePaused = false
 
+    /** During a vehicle pause: ends the pause when the user walks again (STEPW-60). Main thread only. */
+    private val resumeWatch = VehicleResumeWatch()
+
+    /** Detector listener used only during a vehicle pause, to feed [resumeWatch]. Main thread only. */
+    private var pauseWatcher: StepDetectorSource? = null
+
+    /** Sensor events since counting started; only the first few are logged (STEPW-61). Main thread only. */
+    private var counterEventsSinceStart = 0L
+    private var accelStepsSinceStart = 0L
+
     /** Start time of a vehicle detected on the main thread, handled by the consumer. */
     private val pendingVehicleStart = AtomicReference<Long?>(null)
 
@@ -255,7 +265,9 @@ class StepCounterService : Service(), SensorEventListener {
                     lastHeartbeat = now
                     // Renews the wake lock well before its timeout while counting, so it never
                     // lapses during a session (it used to lapse ten minutes after the last step).
-                    if (started && !destroyed && !vehiclePaused && LiveSteps.tracking.value) {
+                    // Also during a vehicle pause: the step detector is not a wake-up sensor on
+                    // some phones (Galaxy S24 Ultra), and the pause watcher must hear the walk.
+                    if (started && !destroyed && (vehiclePaused || LiveSteps.tracking.value)) {
                         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
                     }
                     DebugLog.add(
@@ -326,10 +338,8 @@ class StepCounterService : Service(), SensorEventListener {
             started = true
             beginCounting(plan)
         } else if (vehiclePaused) {
-            // The user pressed record again after a vehicle stop. Detection starts fresh.
-            vehiclePaused = false
-            walkingPace.reset()
-            beginCounting(plan)
+            // The user pressed Record during a vehicle pause.
+            resumeAfterVehicle("Record pressed")
         }
         return START_STICKY
     }
@@ -357,7 +367,10 @@ class StepCounterService : Service(), SensorEventListener {
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
         // Diagnostics are written before the count, so events are visible even if storage fails.
         recordEventDiagnostics(now, raw)
-        DebugLog.add("counter", "raw=$raw (previous=$sensorRaw)", now)
+        // Only the first events of a session are logged; the heartbeat summarises the rest.
+        if (shouldLogStepEvent(++counterEventsSinceStart)) {
+            DebugLog.add("counter", "raw=$raw (previous=$sensorRaw)", now)
+        }
         val live = synchronized(countLock) {
             rollDayLocked(now)
             // The counter is the source of truth: it keeps counting in the sensor hub while the
@@ -403,6 +416,8 @@ class StepCounterService : Service(), SensorEventListener {
         accelSource = null
         detectorSource?.stop()
         detectorSource = null
+        pauseWatcher?.stop()
+        pauseWatcher = null
         headingSource?.stop()
         headingSource = null
         stopLocation()
@@ -472,6 +487,8 @@ class StepCounterService : Service(), SensorEventListener {
                     DebugLog.add("service", "counting begins: stored today=$total, counter baseline=${sensorRaw ?: "next reading"}")
                     liveLocked()
                 }
+                counterEventsSinceStart = 0L
+                accelStepsSinceStart = 0L
                 LiveSteps.reset(live)
                 updateNotification(live)
                 startSource(plan)
@@ -551,8 +568,9 @@ class StepCounterService : Service(), SensorEventListener {
 
     /**
      * The live source while counting with a step counter. With a TYPE_STEP_DETECTOR the detector
-     * drives the live total and the accelerometer stays off. Without one, the accelerometer runs
-     * alongside the counter as before. Main thread only.
+     * drives the live total and the accelerometer stays off: it is a fallback only, and running it
+     * beside a working detector showed phantom steps that later vanished (STEPW-62). Without a
+     * detector, the accelerometer runs alongside the counter. Main thread only.
      */
     private fun startLiveSource() {
         if (detectorActive) {
@@ -560,12 +578,7 @@ class StepCounterService : Service(), SensorEventListener {
             if (source.start()) {
                 detectorSource = source
                 Log.d(TAG_STEPS, "Step source: TYPE_STEP_DETECTOR (live), TYPE_STEP_COUNTER (saved total)")
-                DebugLog.add("sensor", "live source: TYPE_STEP_DETECTOR registered")
-                // The accelerometer covers the warm-up, when the phone holds the first steps back.
-                if (hasAccelerometer(this)) {
-                    startAccelerometer()
-                    DebugLog.add("sensor", "accelerometer started for instant first steps")
-                }
+                DebugLog.add("sensor", "live source: TYPE_STEP_DETECTOR registered; accelerometer off")
                 return
             }
             // Registration refused: fall back to the accelerometer path, as on a device without a detector.
@@ -576,7 +589,9 @@ class StepCounterService : Service(), SensorEventListener {
         }
         Log.d(TAG_STEPS, "Step source: TYPE_STEP_COUNTER (saved total) with accelerometer fallback")
         DebugLog.add("sensor", "live source: TYPE_STEP_COUNTER (saved total) with accelerometer fallback")
-        if (hasAccelerometer(this)) startAccelerometer()
+        if (accelerometerNeeded(detectorRunning = false, hasAccelerometer = hasAccelerometer(this))) {
+            startAccelerometer()
+        }
     }
 
     /**
@@ -597,10 +612,10 @@ class StepCounterService : Service(), SensorEventListener {
             liveLocked() to detectedSinceStart
         }
         drawStep(now)
-        if (running <= DETECTOR_LOG_EVENTS) {
+        if (shouldLogStepEvent(running)) {
             Log.d(TAG_STEPS, "Detector event $running at ${timestampNanos / NANOS_PER_MILLI} ms, running count $running")
+            DebugLog.add("detector", "step $running since start, live total $live")
         }
-        DebugLog.add("detector", "step $running since start, live total $live")
         LiveSteps.reset(live)
         wakeups.trySend(Unit)
     }
@@ -633,7 +648,9 @@ class StepCounterService : Service(), SensorEventListener {
         } ?: return
         recordStepForCadence(now)
         wakeLock?.acquire(WAKE_LOCK_TIMEOUT_MS)
-        if (counterActive) DebugLog.add("accel", "provisional step, live total $live", now)
+        if (counterActive && shouldLogStepEvent(++accelStepsSinceStart)) {
+            DebugLog.add("accel", "provisional step, live total $live", now)
+        }
         drawStep(now)
         LiveSteps.reset(live)
         wakeups.trySend(Unit)
@@ -892,6 +909,10 @@ class StepCounterService : Service(), SensorEventListener {
         val kmh = location.speed.toDouble() * MPS_TO_KMH
         val accuracy = location.accuracy.toDouble()
         val now = System.currentTimeMillis()
+        // Still riding: steps felt in the vehicle must not end the pause.
+        if (vehiclePaused && kmh >= VEHICLE_SPEED_KMH && accuracy <= PACE_MAX_ACCURACY_M) {
+            resumeWatch.onFastFix(now)
+        }
         val update = walkingPace.onFix(kmh, accuracy, now) ?: return
         when (val event = update.vehicleEvent) {
             is VehicleStarted -> onVehicleStarted(event.startTimeMillis)
@@ -910,8 +931,9 @@ class StepCounterService : Service(), SensorEventListener {
     }
 
     /**
-     * Main thread. Stops the step source and turns counting off, but keeps the service up so
-     * the GPS listener can see the vehicle end. The consumer then removes the ride's steps.
+     * Main thread. Stops the step sources but keeps the service up, and keeps the user's choice
+     * to count, so counting resumes by itself (STEPW-60): when GPS sees the ride end, or when the
+     * user walks again (GPS often has no fix after a ride). The consumer removes the ride's steps.
      */
     private fun onVehicleStarted(startMillis: Long) {
         if (vehiclePaused || destroyed) return
@@ -929,15 +951,23 @@ class StepCounterService : Service(), SensorEventListener {
         notifyJob?.cancel()
         notifyJob = null
         LiveSteps.setTracking(false)
+        val pause = prefsOnVehiclePause(prefs().getBoolean(KEY_COUNTING_ON, false))
         prefs().edit()
-            .putBoolean(KEY_COUNTING_ON, false)
+            .putBoolean(KEY_COUNTING_ON, pause.countingOn)
             // Steps during the ride must not be added when counting resumes.
-            .putBoolean(KEY_SESSION_OPEN, false)
+            .putBoolean(KEY_SESSION_OPEN, pause.sessionOpen)
             .apply()
-        wakeLock?.let { if (it.isHeld) it.release() }
+        // The wake lock stays held (renewed by the heartbeat) so the pause watcher hears the walk.
         refreshWidgetsNow()
-        DebugLog.add("vehicle", "paused: speed above $VEHICLE_SPEED_KMH km/h sustained since ${startMillis}; counting stopped")
+        startPauseWatcher()
+        DebugLog.add(
+            "vehicle",
+            "paused: speed above $VEHICLE_SPEED_KMH km/h sustained since $startMillis; " +
+                "resumes when GPS sees the ride end or after $RESUME_WALK_STEPS steps of walking",
+        )
         pendingVehicleStart.set(startMillis)
+        // The counting notification is replaced below; the next count must redraw it.
+        lastNotifiedSteps = null
         forceFlush = true
         wakeups.trySend(Unit)
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
@@ -948,12 +978,45 @@ class StepCounterService : Service(), SensorEventListener {
         }
     }
 
-    /** Main thread. The vehicle has ended, so the GPS listener is no longer needed. */
+    /** Main thread. GPS says the ride has ended: counting resumes. */
     private fun onVehicleEnded() {
-        if (!vehiclePaused) return
-        DebugLog.add("vehicle", "ended; service stopping")
-        stopLocation()
-        stopSelf()
+        resumeAfterVehicle("GPS speed below $VEHICLE_SPEED_KMH km/h")
+    }
+
+    /**
+     * Main thread. During a pause, listens to the step detector so walking can end the pause when
+     * GPS cannot. Its steps are not counted. Phones without a detector rely on GPS or Record.
+     */
+    private fun startPauseWatcher() {
+        resumeWatch.reset()
+        if (pauseWatcher != null || !hasStepDetector(this)) return
+        val watcher = StepDetectorSource(this) { _ ->
+            if (vehiclePaused && resumeWatch.onStep(System.currentTimeMillis())) {
+                resumeAfterVehicle("$RESUME_WALK_STEPS steps of walking")
+            }
+        }
+        if (watcher.start()) pauseWatcher = watcher
+    }
+
+    /**
+     * Main thread. Ends a vehicle pause and counts again from a fresh counter baseline, so the
+     * ride's steps stay out. [reason] goes to the debug log.
+     */
+    private fun resumeAfterVehicle(reason: String) {
+        if (!vehiclePaused || destroyed) return
+        pauseWatcher?.stop()
+        pauseWatcher = null
+        vehiclePaused = false
+        walkingPace.reset()
+        resumeWatch.reset()
+        val plan = lastPlan
+        if (plan == null) {
+            DebugLog.add("vehicle", "ended ($reason) but no step plan is known; service stopping")
+            stopSelf()
+            return
+        }
+        DebugLog.add("vehicle", "ended ($reason); counting resumes")
+        beginCounting(plan)
     }
 
     /**
@@ -1012,7 +1075,7 @@ class StepCounterService : Service(), SensorEventListener {
         NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentTitle("Cadence has paused counting")
-            .setContentText("Vehicle speed detected. Press record in the app to resume.")
+            .setContentText(VEHICLE_PAUSED_TEXT)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .setOngoing(true)
             .setCategory(NotificationCompat.CATEGORY_SERVICE)
@@ -1147,7 +1210,6 @@ class StepCounterService : Service(), SensorEventListener {
     companion object {
         private const val TAG = "StepCounterService"
         private const val TAG_STEPS = "CadenceSteps"
-        private const val DETECTOR_LOG_EVENTS = 5L
         private const val NANOS_PER_MILLI = 1_000_000L
 
         /** How often the debug log records that the service is still alive and what it holds. */

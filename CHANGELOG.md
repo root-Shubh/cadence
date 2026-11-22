@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Counting no longer stays off after a ride (STEPW-60). A vehicle pause used to turn counting off and stop the service, so counting stayed off until Record was pressed, and a reboot or app launch did not restart it. The pause now keeps counting on and resumes by itself when GPS sees the ride end, or after about 20 steps of walking when GPS has no fix. App launch and boot now log why counting was or was not restarted.
+- The debug log now covers a full day (STEPW-61). It keeps 3,000 lines instead of 500, and logs only the first 5 step events of each session instead of every step; the one-a-minute heartbeat covers the rest. Before, the log held about 25 minutes of walking.
+- The step count on screen no longer goes up and back down while standing still (STEPW-62). The accelerometer now runs only on phones without a step detector, as a fallback. On phones with a detector the first steps of a walk can show a few seconds late, in one batch, instead of as provisional steps that might vanish.
+
 ## 1.0.0 - 2026-11-19
 
 First release. Proprietary license: all rights reserved (see LICENSE).

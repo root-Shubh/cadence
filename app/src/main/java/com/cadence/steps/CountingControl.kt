@@ -1,6 +1,7 @@
 package com.cadence.steps
 
 import android.content.Context
+import com.cadence.debug.DebugLog
 
 /** Whether the user wants counting on. Persisted, so counting resumes after the app restarts. */
 fun isCountingOn(context: Context): Boolean =
@@ -24,13 +25,17 @@ fun setCountingOn(context: Context, on: Boolean) {
 }
 
 /**
- * On app launch: restarts the service when counting is on and the permission and a step
- * source are present. Returns true when the service was started.
+ * On app launch or boot: restarts the service when counting is on and the permission and a step
+ * source are present. Returns true when the service was started. [trigger] names the caller in
+ * the debug log, which records the decision either way.
  */
-fun resumeCountingIfNeeded(context: Context): Boolean {
-    if (!isCountingOn(context)) return false
-    if (!hasActivityRecognition(context)) return false
-    if (stepTrackingSource(context) is StepTrackingSource.None) return false
-    StepCounterService.start(context.applicationContext)
-    return true
+fun resumeCountingIfNeeded(context: Context, trigger: String = "app launch"): Boolean {
+    val decision = resumeDecision(
+        countingOn = isCountingOn(context),
+        hasPermission = hasActivityRecognition(context),
+        hasSource = stepTrackingSource(context) !is StepTrackingSource.None,
+    )
+    DebugLog.add("service", "$trigger: ${decision.reason}")
+    if (decision.resumes) StepCounterService.start(context.applicationContext)
+    return decision.resumes
 }

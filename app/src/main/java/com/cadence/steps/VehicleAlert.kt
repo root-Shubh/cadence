@@ -13,10 +13,14 @@ const val VEHICLE_NOTIFICATION_ID: Int = 1302
 
 const val VEHICLE_ALERT_TITLE: String = "Are you cheating? 🚗"
 const val VEHICLE_ALERT_TEXT: String =
-    "Looks like you're moving at car or bike speed. Recording has stopped and the steps counted during the ride have been removed."
+    "Looks like you're moving at car or bike speed. Counting is paused and the steps counted during the ride have been removed. It resumes by itself when you walk again."
+
+/** Text of the ongoing notification shown while a vehicle pause runs. */
+const val VEHICLE_PAUSED_TEXT: String =
+    "Vehicle speed detected. Counting resumes by itself when you walk again."
 
 /**
- * Process-wide vehicle alert. The step service raises it when a vehicle is detected and stops
+ * Process-wide vehicle alert. The step service raises it when a vehicle is detected and pauses
  * counting. The UI shows the "Are you cheating?" dialog while [pending] is true and the app is
  * open; otherwise the service posts a notification.
  */
