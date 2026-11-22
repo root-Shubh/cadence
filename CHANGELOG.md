@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Offline map on the Pattern tab (STEPW-65). A Drawing / Map switch shows the day's GPS route and the walk drawing on a map that works with no network: no Google Maps and no map server. The map is drawn by MapLibre from a local PMTiles file; a Chennai map (OpenStreetMap data, zoom 0 to 15, 18 MB) ships with the app, and Change map imports any vector PMTiles file from the phone (checked before use; imported maps can be deleted). The drawing, built from the compass with no GPS, is pinned to the GPS fix closest in time and the caption says how; with no fix that day it is not placed. Map data © OpenStreetMap contributors (see docs/third-party-notices.md).
+
 ## 1.0.1 - 2026-11-22
 
 - Smoother Pattern tab (STEPW-64). The live drawing no longer copies every point on each step, and redraws at most four times a second from a cached, thinned path, so long walks (thousands of steps) no longer stutter. The line is lightly smoothed for display to hide compass wobble; saved points are unchanged. Earlier and Later are replaced by a row of day thumbnails, each read from storage once. The drawing summary now gives only the drawing's size: the step count and distance are shown on Today alone, instead of a second, different step count from the drawing.
