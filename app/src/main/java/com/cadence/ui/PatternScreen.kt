@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -102,6 +103,8 @@ fun PatternScreen(
         value = (saved + today).distinct().sortedDescending()
     }
     var date by remember { mutableStateOf(today) }
+    // Drawing (compass and stride, no GPS) or the offline map with the GPS route (STEPW-65).
+    var showMap by remember { mutableStateOf(false) }
 
     // Each saved day is read from disk once, then kept.
     val savedByDate = remember(profileId) { mutableStateMapOf<String, List<TrackPoint>>() }
@@ -138,11 +141,30 @@ fun PatternScreen(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
-        WalkDrawing(
-            points = points,
-            live = date == today && recording,
-            modifier = Modifier.fillMaxWidth().aspectRatio(1f),
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+            FilterChip(
+                selected = !showMap,
+                onClick = { showMap = false },
+                label = { Text("Drawing") },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            )
+            FilterChip(
+                selected = showMap,
+                onClick = { showMap = true },
+                label = { Text("Map") },
+                modifier = Modifier.weight(1f).heightIn(min = 48.dp),
+            )
+        }
+
+        if (showMap) {
+            PatternMapSection(profileId = profileId, date = date, isToday = date == today, drawing = points)
+        } else {
+            WalkDrawing(
+                points = points,
+                live = date == today && recording,
+                modifier = Modifier.fillMaxWidth().aspectRatio(1f),
+            )
+        }
 
         Text(
             when {

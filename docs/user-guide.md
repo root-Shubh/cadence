@@ -49,6 +49,14 @@ as it grows. Pen up moves without drawing, so you can walk letters; New drawing 
 The line is smoothed a little on screen to hide the compass's wobble. Pick another day from the row
 of thumbnails under the drawing. The drawing shows shape and direction only, so its size is given
 in metres; your step count and distance are on Today.
+
+**Map.** Switch from Drawing to Map to see the day on a map. The map works offline: it is read
+from a file on the phone, and Cadence never contacts a map server. The blue line is the GPS route
+(GPS needs open sky; indoors it rarely gets a fix). The green line is the drawing, pinned to the GPS
+fix taken closest in time; because it comes from the compass, it can drift from the streets. With no
+GPS fix that day the drawing cannot be placed, and the map says so. A map of Chennai is built in.
+Change map lets you import your own map file in PMTiles format (a vector extract of the Protomaps
+basemap, for example made with the pmtiles tool), switch between maps, and delete imported ones.
 Holding the phone in front of you can stop the step sensor from counting those steps (see Today).
 
 ## Calibration (coming in a later release)

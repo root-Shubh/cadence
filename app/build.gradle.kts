@@ -15,6 +15,8 @@ android {
         targetSdk = 34
         versionCode = 3
         versionName = "1.0.1"
+        // Native map libraries only for the phone (arm64) and the emulator (x86_64), to keep the APK small.
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
     }
 
     buildTypes {
@@ -36,7 +38,14 @@ android {
         compose = true
     }
 
+    // The bundled map is read with openFd, which needs the asset stored uncompressed (tiles are gzipped already).
+    androidResources {
+        noCompress += "pmtiles"
+    }
+
     lint {
+        // MapLibre ships a lint rule asking for the Timber logging library; Cadence uses android.util.Log.
+        disable += "LogNotTimber"
         abortOnError = true
     }
 }
@@ -55,6 +64,9 @@ dependencies {
     implementation("androidx.room:room-runtime:2.6.1")
     implementation("androidx.room:room-ktx:2.6.1")
     ksp("androidx.room:room-compiler:2.6.1")
+
+    // Offline map (STEPW-65): BSD-2, reads a local PMTiles file; no Google services.
+    implementation("org.maplibre.gl:android-sdk:11.11.0")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.8.1")
