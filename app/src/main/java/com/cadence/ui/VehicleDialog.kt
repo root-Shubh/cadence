@@ -10,7 +10,7 @@ import androidx.compose.ui.unit.dp
 import com.cadence.steps.VEHICLE_ALERT_TEXT
 import com.cadence.steps.VEHICLE_ALERT_TITLE
 
-/** Shown when a vehicle is detected while the app is open. Recording has already stopped. */
+/** Shown when a vehicle is detected while the app is open. Counting is paused until the user walks again. */
 @Composable
 fun VehicleCheatingDialog(onDismiss: () -> Unit) {
     AlertDialog(

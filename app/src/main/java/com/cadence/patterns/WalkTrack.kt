@@ -130,3 +130,82 @@ object TrackCodec {
 
     fun decodeAll(text: String): List<TrackPoint> = text.lineSequence().mapNotNull { decode(it) }.toList()
 }
+
+/** Points averaged on each side when smoothing a drawing for display (STEPW-64). */
+const val DISPLAY_SMOOTH_RADIUS = 2
+
+/**
+ * A copy of [points] smoothed for display only: each pen-down point becomes the average of its
+ * neighbours within [radius] in the same pen-down run. The compass wobbles a little on every step,
+ * which drew as zigzags. The ends of each run stay put, so runs still join. Saved points are not
+ * changed.
+ */
+fun smoothForDisplay(points: List<TrackPoint>, radius: Int = DISPLAY_SMOOTH_RADIUS): List<TrackPoint> {
+    if (radius <= 0 || points.size < 3) return points
+    val out = ArrayList<TrackPoint>(points.size)
+    var runStart = 0
+    while (runStart < points.size) {
+        // A run: consecutive points drawn with the pen down (the first point is where it starts).
+        var runEnd = runStart
+        while (runEnd + 1 < points.size && points[runEnd + 1].pen) runEnd++
+        for (i in runStart..runEnd) {
+            if (i == runStart || i == runEnd) {
+                out.add(points[i])
+                continue
+            }
+            val from = maxOf(runStart, i - radius)
+            val to = minOf(runEnd, i + radius)
+            var sx = 0.0
+            var sy = 0.0
+            for (j in from..to) {
+                sx += points[j].x
+                sy += points[j].y
+            }
+            val n = (to - from + 1).toDouble()
+            out.add(points[i].copy(x = sx / n, y = sy / n))
+        }
+        runStart = runEnd + 1
+    }
+    return out
+}
+
+/** A stretch of the drawing to stroke: [pen] true draws a line, false a pen-up move. */
+data class DrawSegment(val points: List<ScreenPoint>, val pen: Boolean)
+
+/**
+ * The drawing ready to stroke at [width] by [height]: smoothed, fitted (see [fitTrack]) and split
+ * into pen-down and pen-up segments. Points closer than [minStepPx] to the last kept point are
+ * dropped, so a long walk draws a few hundred segments instead of thousands. Segment ends are kept.
+ */
+fun drawingSegments(
+    points: List<TrackPoint>,
+    width: Float,
+    height: Float,
+    padding: Float,
+    minStepPx: Float = 1.5f,
+): List<DrawSegment> {
+    if (points.size < 2) return emptyList()
+    val screen = fitTrack(smoothForDisplay(points), width, height, padding)
+    val segments = ArrayList<DrawSegment>()
+    var i = 1
+    while (i < points.size) {
+        val pen = points[i].pen
+        val kept = ArrayList<ScreenPoint>()
+        kept.add(screen[i - 1])
+        while (i < points.size && points[i].pen == pen) {
+            val p = screen[i]
+            val last = kept.last()
+            val isEnd = i + 1 >= points.size || points[i + 1].pen != pen
+            if (isEnd || hypot((p.x - last.x).toDouble(), (p.y - last.y).toDouble()) >= minStepPx) kept.add(p)
+            i++
+        }
+        segments.add(DrawSegment(kept, pen))
+    }
+    return segments
+}
+
+/** Width and height of the drawing in metres (east-west, north-south). */
+fun drawingSizeMeters(points: List<TrackPoint>): Pair<Double, Double> {
+    if (points.isEmpty()) return 0.0 to 0.0
+    return (points.maxOf { it.x } - points.minOf { it.x }) to (points.maxOf { it.y } - points.minOf { it.y })
+}

@@ -14,8 +14,11 @@ import java.time.format.DateTimeFormatter
  * in the file, so memory and disk use stay flat however long counting runs.
  */
 object DebugLog {
-    /** Most lines kept. The oldest line is dropped first. */
-    const val DEFAULT_CAPACITY = 500
+    /**
+     * Most lines kept. The oldest line is dropped first. A day of one-a-minute heartbeats is 1,440
+     * lines, so this keeps at least a full day with room for service and vehicle events (STEPW-61).
+     */
+    const val DEFAULT_CAPACITY = 3000
 
     /** File name inside the directory passed to [attach]. */
     const val FILE_NAME = "debug-log.txt"

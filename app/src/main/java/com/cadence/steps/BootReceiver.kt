@@ -17,11 +17,10 @@ class BootReceiver : BroadcastReceiver() {
         if (action != Intent.ACTION_BOOT_COMPLETED && action != Intent.ACTION_MY_PACKAGE_REPLACED) return
         val appContext = context.applicationContext
         DebugLog.attach(appContext.filesDir)
-        val result = runCatching { resumeCountingIfNeeded(appContext) }
-        val outcome = result.fold(
-            onSuccess = { resumed -> if (resumed) "counting restarted" else "counting was off; nothing to do" },
-            onFailure = { e -> "restart refused: ${e.javaClass.simpleName}: ${e.message}" },
-        )
-        DebugLog.add("service", "${action.substringAfterLast('.')}: $outcome")
+        val trigger = action.substringAfterLast('.')
+        // resumeCountingIfNeeded logs its decision; only a refused start is logged here.
+        runCatching { resumeCountingIfNeeded(appContext, trigger) }.onFailure { e ->
+            DebugLog.add("service", "$trigger: restart refused: ${e.javaClass.simpleName}: ${e.message}")
+        }
     }
 }

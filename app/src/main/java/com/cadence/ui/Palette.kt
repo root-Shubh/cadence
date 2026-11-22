@@ -57,3 +57,14 @@ object DarkPalette {
     const val outline = 0xFF8A9893L
     const val outlineVariant = 0xFF3A4742L
 }
+
+/**
+ * Heat ramps for the activity charts (STEPW-63): one warm hue, light to dark for LIGHT..PEAK.
+ * Kept apart from the teal brand colour so heat never reads as "goal". Each ramp passes the dataviz
+ * ordinal checks (monotone lightness, visible step gaps, light end at least 2:1 on the surface).
+ * In dark mode more steps are brighter.
+ */
+object HeatPalette {
+    val light: List<Long> = listOf(0xFFE9A23BL, 0xFFD9822BL, 0xFFC0601CL, 0xFF9A4412L)
+    val dark: List<Long> = listOf(0xFFA9571DL, 0xFFC96E26L, 0xFFE58C3AL, 0xFFF6B565L)
+}
