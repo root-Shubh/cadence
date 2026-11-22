@@ -17,8 +17,14 @@ on with the phone locked and restarts by itself after a reboot.
 
 **Carry the phone in a pocket or on your arm.** The phone's step sensor looks for the swing of a
 walking body. Held steady in front of you, it often does not recognise the steps and counts
-nothing. Phones also hold back the first 10 or so steps of a walk and drop very short walks; the
-first steps show at once as provisional steps until the sensor confirms them.
+nothing. Phones also hold back the first 10 or so steps of a walk and drop very short walks, so
+the first steps of a walk can appear a few seconds late, all at once. The number on screen is the
+phone's step sensor; it does not go up and then back down while you stand still.
+
+**Vehicles.** With location on, Cadence pauses counting when you move above 20 km/h for 20
+seconds, and removes the steps counted during the ride. Counting resumes by itself when GPS sees
+the ride end or, if GPS has no fix (indoors, underground), after about 20 steps of walking. You
+can also press Record to resume at once.
 
 ## Trend (coming in a later release)
 
