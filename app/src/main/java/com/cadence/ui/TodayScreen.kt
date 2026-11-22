@@ -73,6 +73,7 @@ fun TodayScreen(
     notificationsOff: Boolean = false,
     onOpenNotificationSettings: () -> Unit = {},
     activeProfileId: String = DEFAULT_PROFILE_ID,
+    activitySlots: Map<Int, Int> = emptyMap(),
 ) {
     val steps = day?.steps
     val caloriesKnown = day != null && day.totalKcal > 0.0
@@ -199,8 +200,12 @@ fun TodayScreen(
                 }
             }
 
+            Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
+                ActivityTimelineCard(slots = activitySlots)
+            }
+
             if (profileMissing && !caloriesKnown) {
-                Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
+                Reveal(index = 6, modifier = Modifier.fillMaxWidth()) {
                     Card(modifier = Modifier.fillMaxWidth()) {
                         Row(
                             modifier = Modifier.padding(16.dp),
@@ -222,7 +227,7 @@ fun TodayScreen(
                     }
                 }
             } else if (day != null && caloriesKnown) {
-                Reveal(index = 5, modifier = Modifier.fillMaxWidth()) {
+                Reveal(index = 6, modifier = Modifier.fillMaxWidth()) {
                     CalorieGrid(
                         totalKcal = Math.round(day.totalKcal).toInt(),
                         activeKcal = Math.round(day.activeKcal).toInt(),

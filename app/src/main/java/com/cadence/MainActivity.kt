@@ -106,6 +106,9 @@ import java.time.LocalDate
 
 private const val HISTORY_DAYS = 60L
 
+/** Days shown in the steps-by-hour heatmap on Trend (STEPW-63). */
+private const val HOURLY_DAYS = 7
+
 /** Outcome of the last CSV import, shown under the Import CSV button until the next import. */
 private data class ImportStatus(val message: String, val failed: Boolean)
 
@@ -290,6 +293,24 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                // Steps by time of day for the last 7 days (STEPW-63), updated as the service saves.
+                val hourlyDays by produceState<List<Pair<LocalDate, Map<Int, Int>>>>(
+                    initialValue = emptyList(),
+                    today,
+                    activeId,
+                ) {
+                    val end = LocalDate.parse(today)
+                    val start = end.minusDays(HOURLY_DAYS - 1L)
+                    dao.getSlotsFlow(activeId ?: DEFAULT_PROFILE_ID, start.toString(), today).collect { rows ->
+                        val byDay = rows.groupBy { it.dateIso }
+                        value = (0 until HOURLY_DAYS).map { i ->
+                            val date = start.plusDays(i.toLong())
+                            date to (byDay[date.toString()]?.associate { it.slot to it.steps } ?: emptyMap())
+                        }
+                    }
+                }
+                val todaySlots = hourlyDays.lastOrNull()?.takeIf { it.first.toString() == today }?.second ?: emptyMap()
+
                 // Requests the activity-recognition permission, then starts the service.
                 val permissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission(),
@@ -377,6 +398,7 @@ class MainActivity : ComponentActivity() {
                                     modifier = Modifier.weight(1f),
                                     sensorMissing = sensorMissing,
                                     countingStatusText = countingStatusText,
+                                    activitySlots = todaySlots,
                                 )
                             }
                         }
@@ -386,6 +408,7 @@ class MainActivity : ComponentActivity() {
                             modifier = modifier,
                             dailyGoal = eff.dailySteps,
                             weeklyGoal = eff.weeklySteps,
+                            hourlyDays = hourlyDays,
                         )
                         Destination.PATTERN -> PatternScreen(
                             profileId = activeId ?: DEFAULT_PROFILE_ID,
@@ -419,6 +442,7 @@ class MainActivity : ComponentActivity() {
                                 scope.launch {
                                     val id = activeId ?: DEFAULT_PROFILE_ID
                                     dao.deleteProfileHistory(id)
+                                    dao.deleteSlots(id)
                                     dataReset.deleteProfile()
                                     refreshProfiles()
                                 }
@@ -437,6 +461,7 @@ class MainActivity : ComponentActivity() {
                                 scope.launch {
                                     val id = activeId ?: DEFAULT_PROFILE_ID
                                     dao.deleteProfileHistory(id)
+                                    dao.deleteSlots(id)
                                     dataReset.deleteProfile()
                                     refreshProfiles()
                                 }

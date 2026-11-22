@@ -26,7 +26,20 @@ seconds, and removes the steps counted during the ride. Counting resumes by itse
 the ride end or, if GPS has no fix (indoors, underground), after about 20 steps of walking. You
 can also press Record to resume at once.
 
-## Trend (coming in a later release)
+**Activity by time of day.** The card under distance shows today as 96 bars, one per 15 minutes,
+from midnight to midnight. Taller, darker (in dark mode, brighter) bars mean more steps: light is
+under 300 steps in 15 minutes, moderate 300 to 899, brisk 900 to 1,499, peak 1,500 or more. Touch
+or drag across the bars to read one. Below it, Walks lists each stretch of at least 200 steps at a
+steady pace, with its times to the nearest 5 minutes. If Cadence was not running for part of the
+day, the phone's step counter still returns those steps later, but not when they were taken: they
+are in the day total and listed under the chart as steps with no time of day.
+
+## Trend
+
+**Steps by hour.** A grid of the last 7 days, one row per day and one cell per hour, shaded the
+same way (light under 1,000 steps in an hour, moderate 1,000 to 2,999, brisk 3,000 to 4,999, peak
+5,000 or more). Touch a cell to read it. The card names your most active hour. Days saved before
+this version have no time of day, so their rows are empty.
 
 ## Pattern
 

@@ -33,7 +33,16 @@ import com.cadence.data.DEFAULT_PROFILE_ID
 import com.cadence.data.ProfileState
 import com.cadence.data.ProfileStore
 import com.cadence.data.StepDatabase
+import com.cadence.data.StepDayDao
 import com.cadence.data.StepDayEntity
+import com.cadence.data.StepSlotEntity
+import com.cadence.activity.SlotSplit
+import com.cadence.activity.UNTIMED_SLOT
+import com.cadence.activity.planSlotWrite
+import com.cadence.activity.removeSteps
+import com.cadence.activity.slotForWrite
+import com.cadence.activity.slotOf
+import androidx.room.withTransaction
 import com.cadence.MainActivity
 import com.cadence.debug.DebugLog
 import com.cadence.domain.Profile
@@ -178,6 +187,15 @@ class StepCounterService : Service(), SensorEventListener {
 
     /** Steps reported by TYPE_STEP_DETECTOR since counting started today. Guarded by [countLock]. */
     private var detectedSinceStart = 0L
+
+    /**
+     * Steps the counter returned on the first reading after a restart, walked while the service was
+     * off. They are saved with no time of day (STEPW-63). Guarded by [countLock].
+     */
+    private var recoveredSteps = 0L
+
+    /** True until the first counter reading of a session that resumed from the stored reading. Guarded by [countLock]. */
+    private var recoverOnFirstReading = false
 
     /** Detector step times (epoch millis) not yet written to the day file. Guarded by [countLock]. */
     private val pendingStepMillis = ArrayList<Long>()
@@ -376,7 +394,13 @@ class StepCounterService : Service(), SensorEventListener {
             // The counter is the source of truth: it keeps counting in the sensor hub while the
             // phone is locked, so its total includes steps the detector never delivered.
             // The counter has reported, so the detector or accelerometer lead is matched up to here.
-            counterSteps += StepDelta.counterDelta(sensorRaw, raw, lead.takeForCounter(now))
+            val delta = StepDelta.counterDelta(sensorRaw, raw, lead.takeForCounter(now))
+            if (recoverOnFirstReading) {
+                // Measured from the reading saved before the restart: walked while the service was off.
+                recoverOnFirstReading = false
+                if (sensorRaw != null) recoveredSteps += delta
+            }
+            counterSteps += delta
             sensorRaw = raw
             lastCounterMillis = now
             liveLocked()
@@ -484,6 +508,8 @@ class StepCounterService : Service(), SensorEventListener {
                     // baseline, so steps walked while counting was off are not added.
                     val sessionOpen = prefs().getBoolean(KEY_SESSION_OPEN, false)
                     sensorRaw = if (sessionOpen) readStoredRaw() else null
+                    recoverOnFirstReading = sensorRaw != null
+                    recoveredSteps = 0L
                     DebugLog.add("service", "counting begins: stored today=$total, counter baseline=${sensorRaw ?: "next reading"}")
                     liveLocked()
                 }
@@ -686,6 +712,7 @@ class StepCounterService : Service(), SensorEventListener {
         counterSteps = 0L
         lead.reset()
         detectedSinceStart = 0L
+        recoveredSteps = 0L
     }
 
     /**
@@ -778,10 +805,25 @@ class StepCounterService : Service(), SensorEventListener {
         try {
             val state: ProfileState? = ProfileStore(applicationContext).load()
             val profileId = state?.id ?: DEFAULT_PROFILE_ID
-            val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
-            val stored = dao.getByDate(profileId, snap.day)?.steps ?: 0
-            val merged = mergeStored(stored, candidate)
-            dao.upsert(toEntity(state, profileId, snap.day, merged))
+            val db = StepDatabase.getInstance(applicationContext)
+            val dao = db.stepDayDao()
+            var split = SlotSplit(0, 0, 0)
+            // The day total and its time-of-day slots are written together, so they always agree.
+            val merged = db.withTransaction {
+                val stored = dao.getByDate(profileId, snap.day)?.steps ?: 0
+                val total = mergeStored(stored, candidate)
+                dao.upsert(toEntity(state, profileId, snap.day, total))
+                val slots = dao.getSlots(profileId, snap.day).associate { it.slot to it.steps }
+                val owed = synchronized(countLock) {
+                    if (snap.day == liveDay) recoveredSteps.coerceAtMost(Int.MAX_VALUE.toLong()).toInt() else 0
+                }
+                split = planSlotWrite(slots.values.sum(), total, stored, owed)
+                addToSlots(dao, profileId, snap.day, slotForWrite(snap.day, nowMillis, ZoneId.systemDefault()), split, slots)
+                total
+            }
+            if (split.recoveredUsed > 0) {
+                synchronized(countLock) { recoveredSteps = (recoveredSteps - split.recoveredUsed).coerceAtLeast(0L) }
+            }
             appendVehicleLog(nowMillis, merged)
             DebugLog.add("storage", "stored ${snap.day} total $merged (display ${snap.displayed}, counter ${snap.counterTotal})", nowMillis)
             val edit = prefs().edit()
@@ -800,6 +842,27 @@ class StepCounterService : Service(), SensorEventListener {
             // Nothing is marked as written, so the next attempt stores it again.
             Log.w(TAG, "Failed to record step reading", e)
         }
+    }
+
+    /**
+     * Adds one save's [split] to the day's slots: the timed part to [slot], the rest to
+     * [UNTIMED_SLOT]. [current] is the day's slots as read in the same transaction. Consumer only.
+     */
+    private suspend fun addToSlots(
+        dao: StepDayDao,
+        profileId: String,
+        day: String,
+        slot: Int,
+        split: SlotSplit,
+        current: Map<Int, Int>,
+    ) {
+        val rows = buildList {
+            if (split.timed > 0) add(StepSlotEntity(profileId, day, slot, (current[slot] ?: 0) + split.timed))
+            if (split.untimed > 0) {
+                add(StepSlotEntity(profileId, day, UNTIMED_SLOT, (current[UNTIMED_SLOT] ?: 0) + split.untimed))
+            }
+        }
+        if (rows.isNotEmpty()) dao.upsertSlots(rows)
     }
 
     /**
@@ -1027,11 +1090,22 @@ class StepCounterService : Service(), SensorEventListener {
         val dateIso = todayIso()
         val state: ProfileState? = ProfileStore(applicationContext).load()
         val profileId = state?.id ?: DEFAULT_PROFILE_ID
-        val dao = StepDatabase.getInstance(applicationContext).stepDayDao()
+        val db = StepDatabase.getInstance(applicationContext)
+        val dao = db.stepDayDao()
         val current = dao.getByDate(profileId, dateIso)?.steps ?: 0
         val remove = stepsToRemove(loadVehicleLog(), startMillis, current)
         val newTotal = current - remove
-        if (remove > 0) dao.upsert(toEntity(state, profileId, dateIso, newTotal))
+        if (remove > 0) {
+            db.withTransaction {
+                dao.upsert(toEntity(state, profileId, dateIso, newTotal))
+                // The ride's steps leave the time-of-day slots too, from the ride's start onward.
+                val zone = ZoneId.systemDefault()
+                val fromSlot = if (dayIsoOf(startMillis, zone) == dateIso) slotOf(startMillis, zone) else 0
+                val slots = dao.getSlots(profileId, dateIso).associate { it.slot to it.steps }
+                val changed = removeSteps(slots, fromSlot, remove)
+                dao.upsertSlots(changed.map { (slot, steps) -> StepSlotEntity(profileId, dateIso, slot, steps) })
+            }
+        }
         // Keeps the in-memory counts in step with the rolled-back total, so no later write undoes it.
         synchronized(countLock) {
             storedBase = newTotal.toLong()
