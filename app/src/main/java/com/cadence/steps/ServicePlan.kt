@@ -33,3 +33,20 @@ fun servicePlan(
     hasAccelerometer -> ServicePlan.ACCELEROMETER
     else -> ServicePlan.NO_SENSOR
 }
+
+/**
+ * Whether the accelerometer runs beside the hardware step counter. It is a fallback only: with a
+ * working step detector it stays off, because its provisional steps showed and then vanished
+ * while the user stood still (STEPW-62).
+ */
+fun accelerometerNeeded(detectorRunning: Boolean, hasAccelerometer: Boolean): Boolean =
+    hasAccelerometer && !detectorRunning
+
+/** Step events logged one by one at the start of each session; the heartbeat covers the rest. */
+const val STEP_EVENT_LOG_LIMIT: Long = 5L
+
+/**
+ * True for the first [STEP_EVENT_LOG_LIMIT] step events of a session ([eventNumber] counts from 1).
+ * Logging every step filled the debug log in about 25 minutes (STEPW-61).
+ */
+fun shouldLogStepEvent(eventNumber: Long): Boolean = eventNumber in 1..STEP_EVENT_LOG_LIMIT

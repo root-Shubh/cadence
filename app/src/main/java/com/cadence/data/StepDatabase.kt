@@ -34,7 +34,23 @@ val STEP_DB_MIGRATION_1_2: Migration = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [StepDayEntity::class], version = 4, exportSchema = false)
+/** SQL that creates the step_slots table (STEPW-63). Kept here so the migration matches the entity. */
+const val CREATE_STEP_SLOTS_SQL: String =
+    "CREATE TABLE IF NOT EXISTS step_slots (" +
+        "profileId TEXT NOT NULL, " +
+        "dateIso TEXT NOT NULL, " +
+        "slot INTEGER NOT NULL, " +
+        "steps INTEGER NOT NULL, " +
+        "PRIMARY KEY(profileId, dateIso, slot))"
+
+/** Version 4 to 5: adds steps by time of day. Additive, so the day history is kept. */
+val STEP_DB_MIGRATION_4_5: Migration = object : Migration(4, 5) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL(CREATE_STEP_SLOTS_SQL)
+    }
+}
+
+@Database(entities = [StepDayEntity::class, StepSlotEntity::class], version = 5, exportSchema = false)
 abstract class StepDatabase : RoomDatabase() {
 
     abstract fun stepDayDao(): StepDayDao
@@ -51,7 +67,7 @@ abstract class StepDatabase : RoomDatabase() {
                     context.applicationContext,
                     StepDatabase::class.java,
                     DB_NAME,
-                ).addMigrations(STEP_DB_MIGRATION_1_2)
+                ).addMigrations(STEP_DB_MIGRATION_1_2, STEP_DB_MIGRATION_4_5)
                 .fallbackToDestructiveMigration()
                     .build().also { INSTANCE = it }
             }
