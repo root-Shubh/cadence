@@ -2,10 +2,10 @@
 
 ## Unreleased
 
+## 1.0.1 - 2026-11-22
+
 - Smoother Pattern tab (STEPW-64). The live drawing no longer copies every point on each step, and redraws at most four times a second from a cached, thinned path, so long walks (thousands of steps) no longer stutter. The line is lightly smoothed for display to hide compass wobble; saved points are unchanged. Earlier and Later are replaced by a row of day thumbnails, each read from storage once. The drawing summary now gives only the drawing's size: the step count and distance are shown on Today alone, instead of a second, different step count from the drawing.
-
 - Activity by time of day (STEPW-63). Steps are now saved in 5-minute slots as well as the day total, in the same database write, so the slots of a day always add up to its total. Today has a new card: a 24-hour strip of 15-minute bars shaded by intensity (light, moderate, brisk, peak), which you can touch or drag to read, and a list of the day's walks with start, end, minutes and steps. Trend has a steps-by-hour heatmap for the last 7 days and names the most active hour. Steps with no time of day (counted while Cadence was not running, or saved before this version) are kept in the total and listed under the chart instead of being guessed into a time. The database moves to version 5 with a migration, so existing history is kept.
-
 - Counting no longer stays off after a ride (STEPW-60). A vehicle pause used to turn counting off and stop the service, so counting stayed off until Record was pressed, and a reboot or app launch did not restart it. The pause now keeps counting on and resumes by itself when GPS sees the ride end, or after about 20 steps of walking when GPS has no fix. App launch and boot now log why counting was or was not restarted.
 - The debug log now covers a full day (STEPW-61). It keeps 3,000 lines instead of 500, and logs only the first 5 step events of each session instead of every step; the one-a-minute heartbeat covers the rest. Before, the log held about 25 minutes of walking.
 - The step count on screen no longer goes up and back down while standing still (STEPW-62). The accelerometer now runs only on phones without a step detector, as a fallback. On phones with a detector the first steps of a walk can show a few seconds late, in one batch, instead of as provisional steps that might vanish.
