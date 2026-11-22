@@ -46,6 +46,9 @@ this version have no time of day, so their rows are empty.
 Draws your walk step by step, without GPS. Each step moves the pen one stride in the direction the
 phone faces, so hold the phone in front of you, pointing where you walk. The drawing scales to fit
 as it grows. Pen up moves without drawing, so you can walk letters; New drawing starts again.
+The line is smoothed a little on screen to hide the compass's wobble. Pick another day from the row
+of thumbnails under the drawing. The drawing shows shape and direction only, so its size is given
+in metres; your step count and distance are on Today.
 Holding the phone in front of you can stop the step sensor from counting those steps (see Today).
 
 ## Calibration (coming in a later release)
